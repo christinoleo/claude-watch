@@ -4,10 +4,12 @@ import { program } from "commander";
 import { render } from "ink";
 import React from "react";
 import { execSync } from "child_process";
+import { existsSync } from "fs";
 import { App } from "./app.js";
 import { runSetup, runUninstall } from "./setup/index.js";
 import { closeDatabase } from "./db/index.js";
 import { isInTmux, getTmuxSessionName } from "./tmux/detect.js";
+import { DATABASE_PATH } from "./utils/paths.js";
 
 const version = "0.1.0";
 
@@ -92,6 +94,15 @@ program
     }
 
     // We're in the watch session, run the TUI
+
+    // Check if setup has been run
+    if (!existsSync(DATABASE_PATH)) {
+      console.error("claude-watch has not been set up yet.");
+      console.error("");
+      console.error("Run the setup wizard first:");
+      console.error("  claude-watch --setup");
+      process.exit(1);
+    }
 
     // Add tmux keybinding dynamically (prefix + W to switch to watch session)
     try {
