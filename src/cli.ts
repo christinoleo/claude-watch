@@ -49,6 +49,13 @@ program
     if (currentSession !== WATCH_SESSION) {
       console.log(`Switching to '${WATCH_SESSION}' session...`);
 
+      // Build command to re-invoke claude-watch the same way it was originally called
+      const cwd = process.cwd();
+      // Escape single quotes in args for shell safety
+      const escapeArg = (arg: string) => `'${arg.replace(/'/g, "'\\''")}'`;
+      const originalCmd = process.argv.map(escapeArg).join(" ");
+      const fullCmd = `cd ${escapeArg(cwd)} && ${originalCmd}`;
+
       try {
         // Check if watch session exists
         let sessionExists = false;
@@ -75,14 +82,14 @@ program
 
           if (!claudeWatchRunning) {
             // claude-watch not running, start it in the existing session
-            execSync(`tmux send-keys -t ${WATCH_SESSION} 'claude-watch' Enter`, { stdio: "inherit" });
+            execSync(`tmux send-keys -t ${WATCH_SESSION} ${escapeArg(fullCmd)} Enter`, { stdio: "inherit" });
           }
 
           // Switch to the session
           execSync(`tmux switch-client -t ${WATCH_SESSION}`, { stdio: "inherit" });
         } else {
           // Session doesn't exist, create it with claude-watch running
-          execSync(`tmux new-session -d -s ${WATCH_SESSION} 'claude-watch'`, { stdio: "inherit" });
+          execSync(`tmux new-session -d -s ${WATCH_SESSION} ${escapeArg(fullCmd)}`, { stdio: "inherit" });
           execSync(`tmux switch-client -t ${WATCH_SESSION}`, { stdio: "inherit" });
         }
       } catch (error) {
