@@ -229,6 +229,25 @@ claude-watch/
 └── tests/                  # Test files (mirrors src/)
 ```
 
+## Upgrading
+
+### From npm
+
+```bash
+npm update -g claude-watch
+claude-watch --setup  # Reinstall hooks with updated paths
+```
+
+### From source
+
+```bash
+cd claude-watch
+git pull
+npm install
+npm run build
+claude-watch --setup  # Reinstall hooks with updated paths
+```
+
 ## Uninstall
 
 Remove hooks:
