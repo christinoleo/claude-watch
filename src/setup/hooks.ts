@@ -167,18 +167,16 @@ export function mergeHooks(existing: HooksConfig | undefined, newHooks: HooksCon
   for (const [eventName, matchers] of Object.entries(newHooks)) {
     if (!merged[eventName]) {
       merged[eventName] = [];
+    } else {
+      // Remove any existing claude-watch hooks for this event (so we can replace them)
+      merged[eventName] = merged[eventName].filter((existingMatcher) => {
+        return !existingMatcher.hooks.some((h) => h.command.includes("claude-watch-hook"));
+      });
     }
 
-    // Add new matchers, avoiding duplicates based on command content
+    // Add new claude-watch matchers
     for (const newMatcher of matchers) {
-      const isDuplicate = merged[eventName].some((existingMatcher) => {
-        // Check if any hook command contains "claude-watch-hook"
-        return existingMatcher.hooks.some((h) => h.command.includes("claude-watch-hook"));
-      });
-
-      if (!isDuplicate) {
-        merged[eventName].push(newMatcher);
-      }
+      merged[eventName].push(newMatcher);
     }
   }
 
