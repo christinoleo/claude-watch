@@ -1,5 +1,5 @@
 {
-  "name": "@ringzero/claude-watch",
+  "name": "@johnrobinsn/claude-watch",
   "version": "0.1.0",
   "description": "TUI dashboard for monitoring Claude Code sessions with tmux integration",
   "type": "module",

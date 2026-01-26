@@ -25,7 +25,7 @@ https://github.com/user-attachments/assets/74d77eee-191e-4224-aa87-9985efd1ace7
 ### From npm (recommended)
 
 ```bash
-npm install -g @ringzero/claude-watch
+npm install -g @johnrobinsn/claude-watch
 ```
 
 ### From source
@@ -235,7 +235,7 @@ claude-watch/
 ### From npm
 
 ```bash
-npm update -g @ringzero/claude-watch
+npm update -g @johnrobinsn/claude-watch
 claude-watch --setup  # Reinstall hooks with updated paths
 ```
 
@@ -263,7 +263,7 @@ To fully remove:
 
 ```bash
 # Uninstall the package
-npm uninstall -g @ringzero/claude-watch
+npm uninstall -g @johnrobinsn/claude-watch
 
 # Remove data directory (optional)
 rm -rf ~/.claude-watch

@@ -7,7 +7,7 @@ This document outlines the process for releasing a new version of claude-watch.
 The package is published to npm under the scoped name:
 
 ```
-@ringzero/claude-watch
+@johnrobinsn/claude-watch
 ```
 
 ## Semantic Versioning
@@ -125,13 +125,9 @@ npm publish --access public
 
 ## First-Time npm Setup
 
-### Create the @ringzero Organization
+### Scoped Package Under Your Username
 
-1. Go to [npmjs.com](https://www.npmjs.com/)
-2. Sign in or create an account
-3. Go to your account settings
-4. Click "Add Organization"
-5. Create organization named `ringzero`
+The package is published under your npm username scope `@johnrobinsn`. No organization setup is required - you can publish scoped packages under your own username.
 
 ### Update package.json
 
@@ -139,7 +135,7 @@ Ensure `package.json` has the scoped name:
 
 ```json
 {
-  "name": "@ringzero/claude-watch",
+  "name": "@johnrobinsn/claude-watch",
   "version": "0.1.0",
   "publishConfig": {
     "access": "public"
@@ -147,7 +143,7 @@ Ensure `package.json` has the scoped name:
 }
 ```
 
-### Link npm to Your Organization
+### Login to npm
 
 ```bash
 npm login
@@ -159,14 +155,14 @@ npm login
 ### 1. Verify npm Publication
 
 ```bash
-npm view @ringzero/claude-watch
+npm view @johnrobinsn/claude-watch
 ```
 
 ### 2. Test Installation
 
 ```bash
 # In a clean directory
-npm install -g @ringzero/claude-watch
+npm install -g @johnrobinsn/claude-watch
 claude-watch --version
 claude-watch --help
 ```
@@ -213,11 +209,11 @@ npm login
 
 ### "Package name too similar to existing package"
 
-The scoped name `@ringzero/claude-watch` should avoid this issue.
+The scoped name `@johnrobinsn/claude-watch` should avoid this issue.
 
 ### "You do not have permission to publish"
 
-Ensure you're a member of the @ringzero organization with publish rights.
+Ensure you're logged in as `johnrobinsn` on npm.
 
 ### "This package requires a paid subscription"
 
