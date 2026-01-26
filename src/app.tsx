@@ -8,7 +8,7 @@ import { DATABASE_PATH } from "./utils/paths.js";
 import { initializeSchema } from "./db/schema.js";
 import { isInTmux, getAllTmuxSessions, type TmuxSession } from "./tmux/detect.js";
 import { switchToTarget } from "./tmux/navigate.js";
-import { capturePaneContent } from "./tmux/pane.js";
+import { capturePaneContent, detectRecentInterruption } from "./tmux/pane.js";
 import type { Session } from "./db/sessions.js";
 
 const POLL_INTERVAL = 500; // ms
@@ -109,20 +109,12 @@ export function App() {
           const content = capturePaneContent(session.tmux_target);
           if (!content) continue;
 
-          const isWorking = content.includes("Esc to interrupt") || content.includes("esc to interrupt");
-          const isWaiting = content.includes("Esc to cancel") || content.includes("esc to cancel");
-          const isActive = isWorking || isWaiting;
+          // Only detect explicit interruption/decline signals
+          // All other state transitions are handled by hooks
+          const interruption = detectRecentInterruption(content);
 
-          if (isWorking && session.state !== "busy") {
-            // Pane shows working but state is not busy - set to busy
-            const stmt = db.prepare(`
-              UPDATE sessions
-              SET state = 'busy', current_action = 'Working...', last_update = ?
-              WHERE id = ?
-            `);
-            stmt.run(Date.now(), session.id);
-          } else if (!isActive && session.state !== "idle") {
-            // Pane shows idle (no Esc prompt) but state is not idle - set to idle
+          if (interruption && session.state !== "idle") {
+            // User interrupted or declined - explicit signal to go idle
             const stmt = db.prepare(`
               UPDATE sessions
               SET state = 'idle', current_action = NULL, prompt_text = NULL, last_update = ?

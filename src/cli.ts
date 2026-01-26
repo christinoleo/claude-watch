@@ -111,6 +111,13 @@ program
       process.exit(1);
     }
 
+    // Rename current window to "watch"
+    try {
+      execSync(`tmux rename-window watch`, { stdio: "ignore" });
+    } catch {
+      // Ignore errors
+    }
+
     // Add tmux keybinding dynamically (prefix + W to switch to watch session pane)
     try {
       execSync(`tmux bind-key W switch-client -t "${WATCH_SESSION}:1.1"`, { stdio: "ignore" });
