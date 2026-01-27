@@ -79,54 +79,46 @@ program
       const fullCmd = `cd ${escapeArg(cwd)} && ${originalCmd}`;
 
       try {
-        // Check if watch session exists
-        let sessionExists = false;
+        // Kill any existing watch session that isn't running claude-watch,
+        // then (re)create it with the command passed directly to new-session.
+        //
+        // We avoid tmux send-keys entirely because it races with shell init
+        // on macOS: zsh's compinit prompt intercepts keystrokes before the
+        // shell is ready, mangling the command (e.g. "cd" becoming "åWcd").
+        // Passing the command to new-session bypasses interactive shell init.
+        //
+        // If this causes issues on other platforms (e.g. WSL/Ubuntu), the
+        // alternative is send-keys with a delay/readiness check:
+        //   execSync(`tmux new-session -d -s ${WATCH_SESSION}`, ...);
+        //   execSync(`tmux send-keys -t ${WATCH_SESSION} ${escapeArg(fullCmd)} Enter`, ...);
+
+        let needsCreate = true;
         try {
           execSync(`tmux has-session -t ${WATCH_SESSION} 2>/dev/null`, { stdio: "ignore" });
-          sessionExists = true;
-        } catch {
-          sessionExists = false;
-        }
-
-        if (sessionExists) {
-          // Check if claude-watch is running in the session
-          let claudeWatchRunning = false;
+          // Session exists - check if claude-watch is already running
           try {
             const paneCmd = execSync(
               `tmux list-panes -t ${WATCH_SESSION} -F "#{pane_current_command}"`,
               { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
             ).trim();
-            // Check if node or claude-watch is running (our process)
-            claudeWatchRunning = paneCmd.includes("node") || paneCmd.includes("claude-watch");
+            if (paneCmd.includes("node") || paneCmd.includes("claude-watch")) {
+              // Already running, just switch to it
+              needsCreate = false;
+            } else {
+              // Session exists but claude-watch isn't running, kill and recreate
+              execSync(`tmux kill-session -t ${WATCH_SESSION}`, { stdio: "ignore" });
+            }
           } catch {
-            claudeWatchRunning = false;
+            execSync(`tmux kill-session -t ${WATCH_SESSION}`, { stdio: "ignore" });
           }
-
-          if (!claudeWatchRunning) {
-            // claude-watch not running, start it in the existing session
-            execSync(`tmux send-keys -t ${WATCH_SESSION} ${escapeArg(fullCmd)} Enter`, { stdio: "inherit" });
-          }
-
-          // Switch to the session
-          execSync(`tmux switch-client -t ${WATCH_SESSION}`, { stdio: "inherit" });
-        } else {
-          // Session doesn't exist, create it with claude-watch running.
-          //
-          // NOTE: We pass the command directly to new-session rather than
-          // creating an empty session and using send-keys. The send-keys
-          // approach caused a race condition on macOS where zsh's compinit
-          // prompt would intercept keystrokes before the shell was ready,
-          // mangling the command (e.g. "cd" becoming "d"). Passing the
-          // command to new-session avoids the interactive shell init entirely.
-          //
-          // If this causes issues on other platforms (e.g. WSL/Ubuntu where
-          // send-keys was previously used), the alternative is:
-          //   execSync(`tmux new-session -d -s ${WATCH_SESSION}`, { stdio: "ignore" });
-          //   execSync(`tmux send-keys -t ${WATCH_SESSION} ${escapeArg(fullCmd)} Enter`, { stdio: "ignore" });
-          // but that requires a delay or readiness check to avoid the macOS race.
-          execSync(`tmux new-session -d -s ${WATCH_SESSION} ${escapeArg(fullCmd)}`, { stdio: "ignore" });
-          execSync(`tmux switch-client -t ${WATCH_SESSION}`, { stdio: "inherit" });
+        } catch {
+          // Session doesn't exist
         }
+
+        if (needsCreate) {
+          execSync(`tmux new-session -d -s ${WATCH_SESSION} ${escapeArg(fullCmd)}`, { stdio: "ignore" });
+        }
+        execSync(`tmux switch-client -t ${WATCH_SESSION}`, { stdio: "inherit" });
       } catch (error) {
         console.error("Failed to switch to watch session:", error);
         process.exit(1);
