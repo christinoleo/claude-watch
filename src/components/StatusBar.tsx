@@ -11,9 +11,9 @@ export function StatusBar({ inTmux }: StatusBarProps) {
     <Box borderStyle="single" borderTop={false} paddingX={1} justifyContent="space-between">
       <Text>
         <Text color="cyan">[Enter]</Text>
-        <Text dimColor> Jump to session </Text>
+        <Text dimColor> Go </Text>
         <Text color="cyan">[↑↓/jk]</Text>
-        <Text dimColor> Navigate </Text>
+        <Text dimColor> Select </Text>
         <Text color="cyan">[q]</Text>
         <Text dimColor> Quit </Text>
         <Text color="cyan">[prefix+W]</Text>
