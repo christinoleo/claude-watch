@@ -68,17 +68,10 @@ export async function runSetup(): Promise<void> {
 export async function runCleanup(): Promise<void> {
   console.log("\n claude-watch Cleanup\n");
 
-  // Remove hooks
   console.log("Removing Claude Code hooks...");
-  const confirmHooks = await confirm("Remove claude-watch hooks from Claude settings?");
-  if (confirmHooks) {
-    uninstallHooks();
-    console.log("  Hooks removed successfully");
-  } else {
-    console.log("  Skipped");
-  }
+  uninstallHooks();
+  console.log("  Hooks removed successfully");
 
-  // Optionally remove data directory
   console.log("\nData directory: " + CLAUDE_WATCH_DIR);
   console.log("  (Manual removal: rm -rf ~/.claude-watch)");
 
