@@ -13,7 +13,6 @@ import { switchToTarget } from "./tmux/navigate.js";
 import { capturePaneContent, detectRecentInterruption } from "./tmux/pane.js";
 
 const POLL_INTERVAL = 500; // ms
-const BLINK_INTERVAL = 500; // ms
 const CLEANUP_INTERVAL = 5000; // ms
 const PANE_CHECK_INTERVAL = 2000; // ms - check tmux panes for prompt
 
@@ -23,7 +22,6 @@ export function App() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [tmuxSessions, setTmuxSessions] = useState<TmuxSession[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [showBlink, setShowBlink] = useState(true);
   const [inTmux] = useState(() => isInTmux());
   const [currentTmuxSession] = useState(() => getTmuxSessionName());
 
@@ -35,13 +33,25 @@ export function App() {
   const loadSessions = useCallback(() => {
     try {
       const loadedSessions = getAllSessions();
-      setSessions(loadedSessions);
+
+      // Only update if sessions have changed (compare by JSON to detect actual changes)
+      setSessions((prev) => {
+        const prevJson = JSON.stringify(prev);
+        const newJson = JSON.stringify(loadedSessions);
+        return prevJson === newJson ? prev : loadedSessions;
+      });
 
       // Also load tmux sessions (excluding the current session where claude-watch runs)
       const loadedTmuxSessions = getAllTmuxSessions().filter(
         (ts) => ts.name !== currentTmuxSession
       );
-      setTmuxSessions(loadedTmuxSessions);
+
+      // Only update if tmux sessions have changed
+      setTmuxSessions((prev) => {
+        const prevJson = JSON.stringify(prev);
+        const newJson = JSON.stringify(loadedTmuxSessions);
+        return prevJson === newJson ? prev : loadedTmuxSessions;
+      });
 
       // Adjust selected index if out of bounds
       const totalCount = getTotalItemCount(loadedSessions, loadedTmuxSessions);
@@ -59,14 +69,6 @@ export function App() {
     const interval = setInterval(loadSessions, POLL_INTERVAL);
     return () => clearInterval(interval);
   }, [loadSessions]);
-
-  // Blink effect for busy sessions
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setShowBlink((prev) => !prev);
-    }, BLINK_INTERVAL);
-    return () => clearInterval(interval);
-  }, []);
 
   // Cleanup stale sessions periodically
   useEffect(() => {
@@ -170,7 +172,6 @@ export function App() {
           sessions={sessions}
           tmuxSessions={tmuxSessions}
           selectedIndex={selectedIndex}
-          showBlink={showBlink}
           width={terminalWidth - 2}
         />
       </Box>

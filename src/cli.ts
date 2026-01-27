@@ -4,13 +4,13 @@ import { program } from "commander";
 import { render } from "ink";
 import React from "react";
 import { execSync } from "child_process";
-import { existsSync, writeFileSync, unlinkSync, readFileSync } from "fs";
+import { existsSync, writeFileSync, unlinkSync, readFileSync, mkdirSync } from "fs";
 import { createInterface } from "readline";
 import { App } from "./app.js";
 import { runSetup, runCleanup } from "./setup/index.js";
 import { isInTmux, getTmuxSessionName } from "./tmux/detect.js";
 import { join } from "path";
-import { CLAUDE_WATCH_DIR } from "./utils/paths.js";
+import { CLAUDE_WATCH_DIR, SESSIONS_DIR } from "./utils/paths.js";
 import { isPidAlive } from "./utils/pid.js";
 import { VERSION } from "./utils/version.js";
 import {
@@ -110,8 +110,9 @@ program
           // Switch to the session
           execSync(`tmux switch-client -t ${WATCH_SESSION}`, { stdio: "inherit" });
         } else {
-          // Session doesn't exist, create it with claude-watch running
-          execSync(`tmux new-session -d -s ${WATCH_SESSION} ${escapeArg(fullCmd)}`, { stdio: "ignore" });
+          // Session doesn't exist, create it then send the command
+          execSync(`tmux new-session -d -s ${WATCH_SESSION}`, { stdio: "ignore" });
+          execSync(`tmux send-keys -t ${WATCH_SESSION} ${escapeArg(fullCmd)} Enter`, { stdio: "ignore" });
           execSync(`tmux switch-client -t ${WATCH_SESSION}`, { stdio: "inherit" });
         }
       } catch (error) {
@@ -124,13 +125,12 @@ program
 
     // We're in the watch session, run the TUI
 
-    // Check if setup has been run
+    // Auto-create data directories if needed
     if (!existsSync(CLAUDE_WATCH_DIR)) {
-      console.error("claude-watch has not been set up yet.");
-      console.error("");
-      console.error("Run the setup wizard first:");
-      console.error("  claude-watch --setup");
-      process.exit(1);
+      mkdirSync(CLAUDE_WATCH_DIR, { recursive: true });
+    }
+    if (!existsSync(SESSIONS_DIR)) {
+      mkdirSync(SESSIONS_DIR, { recursive: true });
     }
 
     // Check hooks version and prompt if needed
