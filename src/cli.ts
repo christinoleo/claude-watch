@@ -172,15 +172,22 @@ program
       try {
         const lock = JSON.parse(readFileSync(lockFile, "utf-8"));
         if (lock.pid && isPidAlive(lock.pid)) {
-          console.log("claude-watch is already running.");
-          if (lock.tmux_target) {
-            try {
-              execSync(`tmux switch-client -t "${lock.tmux_target}"`, { stdio: "inherit" });
-            } catch {
-              // Ignore - may already be in the right pane
+          if (lock.version === VERSION) {
+            console.log("claude-watch is already running.");
+            if (lock.tmux_target) {
+              try {
+                execSync(`tmux switch-client -t "${lock.tmux_target}"`, { stdio: "inherit" });
+              } catch {
+                // Ignore - may already be in the right pane
+              }
             }
+            process.exit(0);
+          } else {
+            // Different version — kill old instance and restart
+            console.log(`Restarting claude-watch (${lock.version || "unknown"} → ${VERSION})...`);
+            process.kill(lock.pid, "SIGTERM");
+            execSync("sleep 0.5", { stdio: "ignore" });
           }
-          process.exit(0);
         }
       } catch {
         // Stale or corrupt lock file, proceed
@@ -198,7 +205,7 @@ program
         return "1.1";
       }
     })()}`;
-    writeFileSync(lockFile, JSON.stringify({ pid: process.pid, tmux_target: tmuxTarget }));
+    writeFileSync(lockFile, JSON.stringify({ pid: process.pid, tmux_target: tmuxTarget, version: VERSION }));
 
     // Rename current window to "watch"
     try {
