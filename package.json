@@ -24,6 +24,7 @@
     "lint": "eslint src tests --ext .ts,.tsx",
     "format": "prettier --write 'src/**/*.{ts,tsx}' 'tests/**/*.{ts,tsx}'",
     "prepublishOnly": "npm run build",
+    "preuninstall": "claude-watch --cleanup || true",
     "version": "node -e \"const v=require('./package.json').version; require('fs').writeFileSync('src/utils/version.ts', '/**\\n * Central version constant for claude-watch.\\n * Keep in sync with package.json version.\\n */\\nexport const VERSION = \\\"'+v+'\\\";\\n')\" && git add src/utils/version.ts"
   },
   "keywords": [
