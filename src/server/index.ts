@@ -69,6 +69,9 @@ export function createApp() {
             border-radius: 12px;
             border-left: 4px solid #444;
             touch-action: manipulation;
+            display: flex;
+            align-items: center;
+            gap: 12px;
           }
           .session.permission, .session.waiting { border-left-color: #e74c3c; }
           .session.idle { border-left-color: #f39c12; }
@@ -81,11 +84,13 @@ export function createApp() {
             margin-right: 12px;
             flex-shrink: 0;
           }
-          .target { font-weight: 600; font-size: 18px; }
+          .target { font-weight: 600; font-size: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
           .action {
             color: #aaa;
-            font-size: 15px;
-            margin-bottom: 6px;
+            font-size: 14px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
           }
           .cwd {
             color: #666;
@@ -131,32 +136,36 @@ export function createApp() {
           .project-sessions .session:last-child {
             border-radius: 0 0 8px 8px;
           }
-          .session-info { cursor: default; }
+          .session-info { cursor: default; flex: 1; min-width: 0; }
           .session-info.clickable { cursor: pointer; }
           .session-info.clickable:hover { background: #252525; border-radius: 8px; }
           .session-info.clickable:active { opacity: 0.7; }
-          .actions { margin-top: 10px; display: flex; gap: 8px; }
+          .actions { display: flex; gap: 6px; flex-shrink: 0; }
           .actions button {
-            background: #333;
-            color: #fff;
+            background: #222;
+            color: #aaa;
             border: none;
-            padding: 12px 18px;
+            padding: 8px 10px;
             font-size: 16px;
-            border-radius: 6px;
+            border-radius: 8px;
             cursor: pointer;
-            min-width: 44px;
-            min-height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             touch-action: manipulation;
             -webkit-tap-highlight-color: rgba(255,255,255,0.2);
+            transition: all 0.15s;
           }
-          .actions button:active { background: #555; }
+          .actions button:hover { color: #fff; background: #333; }
+          .actions button:active { background: #444; transform: scale(0.95); }
           .project-header button {
             min-width: 44px;
             min-height: 44px;
             touch-action: manipulation;
             -webkit-tap-highlight-color: rgba(255,255,255,0.2);
           }
-          .actions button.danger { background: #c0392b; }
+          .actions button.danger { background: #7f1d1d; color: #fca5a5; }
+          .actions button.danger:hover { background: #991b1b; color: #fff; }
 
           /* Folder Browser Modal */
           .folder-modal {
@@ -428,7 +437,7 @@ export function createApp() {
                           '<div class="actions">' +
                             (isLocal ? '' : '<button onclick="send(\\'' + s.tmux_target + '\\', \\'Escape\\')"><iconify-icon icon="ph:stop"></iconify-icon></button>') +
                             (isLocal ? '' : '<button onclick="copyCmd(\\'' + s.tmux_target + '\\')"><iconify-icon icon="ph:copy"></iconify-icon></button>') +
-                            '<button onclick="killSession(\\'' + s.id + '\\', ' + s.pid + ', \\'' + (s.tmux_target || '') + '\\', this)" class="kill-btn"><iconify-icon icon="ph:skull"></iconify-icon></button>' +
+                            '<button onclick="killSession(\\'' + s.id + '\\', ' + s.pid + ', \\'' + (s.tmux_target || '') + '\\', this)" class="danger"><iconify-icon icon="ph:skull"></iconify-icon></button>' +
                           '</div>' +
                         '</div>';
                       }).join('') +
@@ -874,23 +883,28 @@ export function createApp() {
             display: flex;
             background: #111;
             padding: 4px;
+            gap: 2px;
           }
           .toolbar button {
             flex: 1;
             background: transparent;
             border: none;
-            padding: 8px 0;
-            font-size: 16px;
+            padding: 6px 0;
+            font-size: 14px;
             color: #aaa;
             cursor: pointer;
             -webkit-tap-highlight-color: transparent;
             touch-action: manipulation;
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
+            gap: 2px;
             transition: all 0.15s;
             border-radius: 6px;
           }
+          .toolbar button iconify-icon { font-size: 20px; }
+          .toolbar button span { font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; }
           .toolbar button:hover { color: #fff; background: #222; }
           .toolbar button:active { background: #333; transform: scale(0.95); }
           .input-row {
@@ -945,12 +959,13 @@ export function createApp() {
           <pre id="terminal">Loading...</pre>
         </div>
         <div class="toolbar">
-          <button onclick="send('Up')"><iconify-icon icon="ph:arrow-up"></iconify-icon></button>
-          <button onclick="send('Down')"><iconify-icon icon="ph:arrow-down"></iconify-icon></button>
-          <button onclick="send('Space')"><iconify-icon icon="ph:keyboard"></iconify-icon></button>
-          <button onclick="send('Tab')"><iconify-icon icon="ph:arrow-line-right"></iconify-icon></button>
-          <button onclick="send('C-u')"><iconify-icon icon="ph:eraser"></iconify-icon></button>
-          <button onclick="send('BTab')"><iconify-icon icon="ph:swap"></iconify-icon></button>
+          <button onclick="send('Up')"><iconify-icon icon="ph:arrow-up"></iconify-icon><span>Up</span></button>
+          <button onclick="send('Down')"><iconify-icon icon="ph:arrow-down"></iconify-icon><span>Down</span></button>
+          <button onclick="send('Space')"><iconify-icon icon="ph:selection-all"></iconify-icon><span>Space</span></button>
+          <button onclick="send('Tab')"><iconify-icon icon="ph:arrow-elbow-down-right"></iconify-icon><span>Tab</span></button>
+          <button onclick="send('Enter')"><iconify-icon icon="ph:corner-down-left"></iconify-icon><span>Enter</span></button>
+          <button onclick="send('C-l')"><iconify-icon icon="ph:eraser"></iconify-icon><span>Clear</span></button>
+          <button onclick="send('C-c')"><iconify-icon icon="ph:command"></iconify-icon><span>Ctrl-C</span></button>
         </div>
         <div class="input-row">
           <input type="text" id="input" placeholder="Send a message..." autocomplete="off" autocorrect="off">

@@ -25,6 +25,28 @@ function syncSessionStates(): void {
   }
 }
 
+// Deduplicate sessions by tmux_target, keeping only the most recent one
+function deduplicateByTmuxTarget<T extends { tmux_target: string | null; last_update: number }>(
+  sessions: T[]
+): T[] {
+  const byTarget = new Map<string, T>();
+  const noTarget: T[] = [];
+
+  for (const session of sessions) {
+    if (!session.tmux_target) {
+      noTarget.push(session);
+      continue;
+    }
+
+    const existing = byTarget.get(session.tmux_target);
+    if (!existing || session.last_update > existing.last_update) {
+      byTarget.set(session.tmux_target, session);
+    }
+  }
+
+  return [...byTarget.values(), ...noTarget];
+}
+
 // GET /api/sessions
 sessionsRoutes.get("/", (c) => {
   try {
@@ -35,9 +57,11 @@ sessionsRoutes.get("/", (c) => {
       ...s,
       pane_title: s.tmux_target ? getPaneTitle(s.tmux_target) : null,
     }));
+    // Deduplicate by tmux_target to avoid showing same pane multiple times
+    const dedupedSessions = deduplicateByTmuxTarget(enrichedSessions);
     const response: SessionsResponse = {
-      sessions: enrichedSessions,
-      count: enrichedSessions.length,
+      sessions: dedupedSessions,
+      count: dedupedSessions.length,
       timestamp: Date.now(),
     };
     return c.json(response);
