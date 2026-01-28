@@ -1,6 +1,6 @@
 import React from "react";
 import { Box, Text } from "ink";
-import type { Session } from "../db/sessions.js";
+import type { Session } from "../db/index.js";
 import type { TmuxSession } from "../tmux/detect.js";
 import { SessionEntry, type DisplayItem } from "./SessionEntry.js";
 
@@ -8,11 +8,10 @@ interface SessionListProps {
   sessions: Session[];
   tmuxSessions: TmuxSession[];
   selectedIndex: number;
-  showBlink: boolean;
   width?: number;
 }
 
-export function SessionList({ sessions, tmuxSessions, selectedIndex, showBlink, width }: SessionListProps) {
+export function SessionList({ sessions, tmuxSessions, selectedIndex, width }: SessionListProps) {
   // Get tmux session names that have Claude instances
   const claudeTmuxSessions = new Set<string>();
   for (const session of sessions) {
@@ -49,7 +48,6 @@ export function SessionList({ sessions, tmuxSessions, selectedIndex, showBlink, 
           key={item.type === "claude" ? item.session.id : `tmux-${item.tmuxSession.name}`}
           item={item}
           isSelected={index === selectedIndex}
-          showBlink={showBlink}
           width={width}
         />
       ))}

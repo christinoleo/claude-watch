@@ -1,7 +1,27 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Box, Text } from "ink";
-import type { Session, SessionState } from "../db/sessions.js";
+import type { Session, SessionState } from "../db/index.js";
 import type { TmuxSession } from "../tmux/detect.js";
+
+const BLINK_INTERVAL = 500;
+
+// Self-contained blinking bullet - only this component re-renders during blink
+function BlinkingBullet({ color, shouldBlink }: { color: string; shouldBlink: boolean }) {
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    if (!shouldBlink) {
+      setVisible(true);
+      return;
+    }
+    const interval = setInterval(() => {
+      setVisible((prev) => !prev);
+    }, BLINK_INTERVAL);
+    return () => clearInterval(interval);
+  }, [shouldBlink]);
+
+  return <Text color={color}>{visible ? "●" : " "}</Text>;
+}
 
 // Unified display item - either a Claude session or a plain tmux session
 export type DisplayItem =
@@ -11,7 +31,6 @@ export type DisplayItem =
 interface SessionEntryProps {
   item: DisplayItem;
   isSelected: boolean;
-  showBlink?: boolean;
   width?: number;
 }
 
@@ -63,20 +82,9 @@ function truncatePath(path: string, maxLen: number): string {
   return "…" + path.slice(-(maxLen - 1));
 }
 
-function formatRelativeTime(timestamp: number): string {
-  const now = Date.now();
-  const diff = now - timestamp;
-
-  if (diff < 1000) return "now";
-  if (diff < 60000) return `${Math.floor(diff / 1000)}s`;
-  if (diff < 3600000) return `${Math.floor(diff / 60000)}m`;
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h`;
-  return `${Math.floor(diff / 86400000)}d`;
-}
-
-export function SessionEntry({ item, isSelected, showBlink = true, width }: SessionEntryProps) {
+export function SessionEntry({ item, isSelected, width }: SessionEntryProps) {
   if (item.type === "claude") {
-    return <ClaudeEntry session={item.session} isSelected={isSelected} showBlink={showBlink} width={width} />;
+    return <ClaudeEntry session={item.session} isSelected={isSelected} width={width} />;
   } else {
     return <TmuxEntry tmuxSession={item.tmuxSession} isSelected={isSelected} width={width} />;
   }
@@ -85,31 +93,25 @@ export function SessionEntry({ item, isSelected, showBlink = true, width }: Sess
 function ClaudeEntry({
   session,
   isSelected,
-  showBlink,
   width,
 }: {
   session: Session;
   isSelected: boolean;
-  showBlink: boolean;
   width?: number;
 }) {
   const stateColor = getStateColor(session.state);
-  const bullet = "●";
-
-  // For busy state, we alternate visibility to create a blink effect
-  const shouldShowBullet = session.state !== "busy" || showBlink;
+  const shouldBlink = session.state === "busy";
 
   const tmuxTarget = session.tmux_target || "—";
 
   // Fixed widths for prefix and suffix columns
   const prefixWidth = 4; // selector + bullet + space
   const typeWidth = 8;
-  const timeWidth = 4; // e.g., "now", "5s", "2m", "1h", "3d"
   const totalWidth = width || 100;
   const stateWidth = totalWidth <= 70 ? 10 : 22;
 
   // Calculate flex column widths from remaining space
-  const remainingWidth = totalWidth - prefixWidth - typeWidth - timeWidth - stateWidth;
+  const remainingWidth = totalWidth - prefixWidth - typeWidth - stateWidth;
   const targetWidth = Math.floor(remainingWidth * 0.3);
   const pathWidth = remainingWidth - targetWidth;
 
@@ -117,8 +119,8 @@ function ClaudeEntry({
     <Box width={width}>
       {/* Selection indicator (▶ is wide, takes 2 cols) or 2 spaces */}
       <Text color="cyan" bold>{isSelected ? "▶" : "  "}</Text>
-      {/* Bullet in column 4 */}
-      <Text color={stateColor}>{shouldShowBullet ? bullet : " "}</Text>
+      {/* Bullet in column 4 - self-contained blink logic */}
+      <BlinkingBullet color={stateColor} shouldBlink={shouldBlink} />
       <Text>{" "}</Text>
 
       {/* tmux target */}
@@ -134,11 +136,6 @@ function ClaudeEntry({
       {/* Type column */}
       <Box width={typeWidth}>
         <Text dimColor>claude</Text>
-      </Box>
-
-      {/* Last update time */}
-      <Box width={timeWidth} justifyContent="flex-end">
-        <Text dimColor>{formatRelativeTime(session.last_update)}</Text>
       </Box>
 
       {/* State description */}
@@ -163,12 +160,11 @@ function TmuxEntry({
   // Fixed widths for prefix and suffix columns
   const prefixWidth = 4; // selector + bullet + space
   const typeWidth = 8;
-  const timeWidth = 4; // for alignment with ClaudeEntry
   const totalWidth = width || 100;
   const stateWidth = totalWidth <= 70 ? 10 : 22;
 
   // Calculate flex column widths from remaining space
-  const remainingWidth = totalWidth - prefixWidth - typeWidth - timeWidth - stateWidth;
+  const remainingWidth = totalWidth - prefixWidth - typeWidth - stateWidth;
   const targetWidth = Math.floor(remainingWidth * 0.3);
   const pathWidth = remainingWidth - targetWidth;
 
@@ -195,11 +191,6 @@ function TmuxEntry({
       {/* Type column */}
       <Box width={typeWidth}>
         <Text dimColor>tmux</Text>
-      </Box>
-
-      {/* Empty time column for alignment */}
-      <Box width={timeWidth}>
-        <Text dimColor></Text>
       </Box>
 
       {/* Empty state column for alignment */}

@@ -1,34 +1,26 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
-import Database from "better-sqlite3";
-import { mkdirSync, rmSync, existsSync, writeFileSync, readFileSync } from "fs";
+import { mkdirSync, rmSync, existsSync, readdirSync } from "fs";
 import { join } from "path";
-import { homedir } from "os";
-import { initializeSchema } from "../../src/db/schema.js";
-import { upsertSession, getAllSessions } from "../../src/db/sessions.js";
+import { tmpdir } from "os";
+import { setSessionsDir, upsertSession, getAllSessions } from "../../src/db/sessions-json.js";
 
 // Test configuration
 const TEST_PORT = 13456;
 const BASE_URL = `http://127.0.0.1:${TEST_PORT}`;
-const CLAUDE_WATCH_DIR = join(homedir(), ".claude-watch");
-const DATABASE_PATH = join(CLAUDE_WATCH_DIR, "state.db");
+const TEST_DIR = join(tmpdir(), "claude-watch-integration-" + Date.now());
+const SESSIONS_DIR = join(TEST_DIR, "sessions");
 
 describe("Integration: API Server", () => {
   let server: { stop: () => void } | null = null;
-  let db: Database.Database;
-  let originalDbExists: boolean;
 
   beforeAll(async () => {
-    // Check if database already exists
-    originalDbExists = existsSync(DATABASE_PATH);
-
     // Ensure directory exists
-    if (!existsSync(CLAUDE_WATCH_DIR)) {
-      mkdirSync(CLAUDE_WATCH_DIR, { recursive: true });
+    if (!existsSync(SESSIONS_DIR)) {
+      mkdirSync(SESSIONS_DIR, { recursive: true });
     }
 
-    // Initialize database
-    db = new Database(DATABASE_PATH);
-    initializeSchema(db);
+    // Set sessions dir for tests
+    setSessionsDir(SESSIONS_DIR);
 
     // Start server
     const { startServer } = await import("../../src/server/index.js");
@@ -44,13 +36,20 @@ describe("Integration: API Server", () => {
       server.stop();
     }
 
-    // Close database
-    db?.close();
+    // Clean up test directory
+    if (existsSync(TEST_DIR)) {
+      rmSync(TEST_DIR, { recursive: true, force: true });
+    }
   });
 
   beforeEach(() => {
     // Clear sessions for each test
-    db.exec("DELETE FROM sessions");
+    if (existsSync(SESSIONS_DIR)) {
+      const files = readdirSync(SESSIONS_DIR);
+      for (const file of files) {
+        rmSync(join(SESSIONS_DIR, file));
+      }
+    }
   });
 
   describe("Health Check", () => {
@@ -76,8 +75,8 @@ describe("Integration: API Server", () => {
     });
 
     it("should return sessions when they exist", async () => {
-      // Insert test session directly into database
-      upsertSession(db, {
+      // Insert test session
+      upsertSession({
         id: "test-session-1",
         pid: 99999,
         cwd: "/test/project",
@@ -97,10 +96,10 @@ describe("Integration: API Server", () => {
 
     it("should return sessions sorted by priority", async () => {
       // Insert sessions with different states
-      upsertSession(db, { id: "s1", pid: 10001, cwd: "/p1", state: "busy" });
-      upsertSession(db, { id: "s2", pid: 10002, cwd: "/p2", state: "permission" });
-      upsertSession(db, { id: "s3", pid: 10003, cwd: "/p3", state: "idle" });
-      upsertSession(db, { id: "s4", pid: 10004, cwd: "/p4", state: "waiting" });
+      upsertSession({ id: "s1", pid: 10001, cwd: "/p1", state: "busy", tmux_target: null });
+      upsertSession({ id: "s2", pid: 10002, cwd: "/p2", state: "permission", tmux_target: null });
+      upsertSession({ id: "s3", pid: 10003, cwd: "/p3", state: "idle", tmux_target: null });
+      upsertSession({ id: "s4", pid: 10004, cwd: "/p4", state: "waiting", tmux_target: null });
 
       const res = await fetch(`${BASE_URL}/api/sessions`);
       const data = await res.json();
@@ -125,7 +124,7 @@ describe("Integration: API Server", () => {
     });
 
     it("should return session when it exists", async () => {
-      upsertSession(db, {
+      upsertSession({
         id: "test-session-123",
         pid: 88888,
         cwd: "/my/project",
@@ -161,18 +160,19 @@ describe("Integration: API Server", () => {
 
 describe("Integration: SSE Stream", () => {
   let server: { stop: () => void } | null = null;
-  let db: Database.Database;
   const SSE_TEST_PORT = 13457;
   const SSE_BASE_URL = `http://127.0.0.1:${SSE_TEST_PORT}`;
+  const SSE_TEST_DIR = join(tmpdir(), "claude-watch-sse-" + Date.now());
+  const SSE_SESSIONS_DIR = join(SSE_TEST_DIR, "sessions");
 
   beforeAll(async () => {
     // Ensure directory exists
-    if (!existsSync(CLAUDE_WATCH_DIR)) {
-      mkdirSync(CLAUDE_WATCH_DIR, { recursive: true });
+    if (!existsSync(SSE_SESSIONS_DIR)) {
+      mkdirSync(SSE_SESSIONS_DIR, { recursive: true });
     }
 
-    db = new Database(DATABASE_PATH);
-    initializeSchema(db);
+    // Set sessions dir for tests
+    setSessionsDir(SSE_SESSIONS_DIR);
 
     const { startServer } = await import("../../src/server/index.js");
     server = await startServer({ port: SSE_TEST_PORT }) as { stop: () => void };
@@ -183,11 +183,21 @@ describe("Integration: SSE Stream", () => {
     if (server && typeof server.stop === "function") {
       server.stop();
     }
-    db?.close();
+
+    // Clean up test directory
+    if (existsSync(SSE_TEST_DIR)) {
+      rmSync(SSE_TEST_DIR, { recursive: true, force: true });
+    }
   });
 
   beforeEach(() => {
-    db.exec("DELETE FROM sessions");
+    // Clear sessions for each test
+    if (existsSync(SSE_SESSIONS_DIR)) {
+      const files = readdirSync(SSE_SESSIONS_DIR);
+      for (const file of files) {
+        rmSync(join(SSE_SESSIONS_DIR, file));
+      }
+    }
   });
 
   it("should return event-stream content type", async () => {
@@ -259,11 +269,12 @@ describe("Integration: SSE Stream", () => {
 
   it("should stream session updates", async () => {
     // Add a session first
-    upsertSession(db, {
+    upsertSession({
       id: "stream-test-session",
       pid: 77777,
       cwd: "/stream/test",
       state: "busy",
+      tmux_target: null,
     });
 
     const controller = new AbortController();

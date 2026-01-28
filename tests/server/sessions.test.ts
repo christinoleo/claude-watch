@@ -1,42 +1,31 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import Database from "better-sqlite3";
 import { createApp } from "../../src/server/index.js";
-import { initializeSchema } from "../../src/db/schema.js";
-import { upsertSession } from "../../src/db/sessions.js";
+import { setSessionsDir, upsertSession } from "../../src/db/sessions-json.js";
 import { mkdirSync, rmSync, existsSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 
-// Create a temporary test database directory
+// Create a temporary test sessions directory
 const TEST_DIR = join(tmpdir(), "claude-watch-test-" + Date.now());
-const TEST_DB_PATH = join(TEST_DIR, "state.db");
-
-// Mock DATABASE_PATH for tests
-import * as paths from "../../src/utils/paths.js";
+const TEST_SESSIONS_DIR = join(TEST_DIR, "sessions");
 
 describe("Server API - Sessions", () => {
-  let db: Database.Database;
   let app: ReturnType<typeof createApp>;
 
   beforeEach(() => {
     // Create test directory
-    if (!existsSync(TEST_DIR)) {
-      mkdirSync(TEST_DIR, { recursive: true });
+    if (!existsSync(TEST_SESSIONS_DIR)) {
+      mkdirSync(TEST_SESSIONS_DIR, { recursive: true });
     }
 
-    // Initialize database
-    db = new Database(TEST_DB_PATH);
-    initializeSchema(db);
+    // Set sessions dir for tests
+    setSessionsDir(TEST_SESSIONS_DIR);
 
     // Create app
     app = createApp();
-
-    // Override DATABASE_PATH for the test - we'll need to mock the module
-    // For now, we'll test with the app directly using Hono's test client
   });
 
   afterEach(() => {
-    db.close();
     // Clean up test directory
     if (existsSync(TEST_DIR)) {
       rmSync(TEST_DIR, { recursive: true, force: true });
@@ -56,25 +45,47 @@ describe("Server API - Sessions", () => {
   describe("GET /api/sessions", () => {
     it("should return sessions response structure", async () => {
       const res = await app.request("/api/sessions");
-      // Note: This will fail if DATABASE_PATH doesn't exist, which is expected
-      // In real tests, we'd mock the database path
-      if (res.status === 200) {
-        const data = await res.json();
-        expect(data).toHaveProperty("sessions");
-        expect(data).toHaveProperty("count");
-        expect(data).toHaveProperty("timestamp");
-        expect(Array.isArray(data.sessions)).toBe(true);
-      }
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data).toHaveProperty("sessions");
+      expect(data).toHaveProperty("count");
+      expect(data).toHaveProperty("timestamp");
+      expect(Array.isArray(data.sessions)).toBe(true);
+    });
+
+    it("should return empty array when no sessions exist", async () => {
+      const res = await app.request("/api/sessions");
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.sessions).toEqual([]);
+      expect(data.count).toBe(0);
     });
   });
 
   describe("GET /api/sessions/:id", () => {
-    it("should return 404 or 500 for non-existent session", async () => {
+    it("should return 404 for non-existent session", async () => {
       const res = await app.request("/api/sessions/nonexistent-id-12345");
-      // Either 404 (session not found) or 500 (db not accessible) is acceptable
-      expect([404, 500]).toContain(res.status);
+      expect(res.status).toBe(404);
       const data = await res.json();
-      expect(data.error).toBeDefined();
+      expect(data.error).toBe("Session not found");
+    });
+
+    it("should return session when it exists", async () => {
+      // Create a test session
+      upsertSession({
+        id: "test-session-id",
+        pid: 12345,
+        cwd: "/test/path",
+        tmux_target: null,
+        state: "idle",
+      });
+
+      const res = await app.request("/api/sessions/test-session-id");
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.session.id).toBe("test-session-id");
+      expect(data.session.cwd).toBe("/test/path");
+      expect(data.session.state).toBe("idle");
     });
   });
 });

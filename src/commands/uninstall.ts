@@ -1,8 +1,8 @@
 import { Command } from "commander";
-import { runUninstall } from "../setup/index.js";
+import { runCleanup } from "../setup/index.js";
 
 export async function runUninstallCommand(): Promise<void> {
-  await runUninstall();
+  await runCleanup();
   process.exit(0);
 }
 

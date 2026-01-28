@@ -8,10 +8,9 @@ describe("StatusBar", () => {
     const { lastFrame } = render(<StatusBar inTmux={true} />);
 
     const output = lastFrame();
-    expect(output).toContain("[Enter]");
-    expect(output).toContain("Jump to session");
-    expect(output).toContain("[↑↓/jk]");
-    expect(output).toContain("Navigate");
+    expect(output).toContain("[h]");
+    expect(output).toContain("Help");
+    expect(output).toContain("[prefix+W]");
     expect(output).toContain("[q]");
     expect(output).toContain("Quit");
   });
@@ -21,7 +20,6 @@ describe("StatusBar", () => {
 
     const output = lastFrame();
     expect(output).toContain("not in tmux");
-    expect(output).toContain("navigation disabled");
   });
 
   it("should not show warning when in tmux", () => {

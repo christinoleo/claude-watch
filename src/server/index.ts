@@ -1,11 +1,10 @@
 import { Hono } from "hono";
 import { html } from "hono/html";
-import Database from "better-sqlite3";
 import { sessionsRoutes } from "./routes/sessions.js";
 import { streamRoute } from "./routes/stream.js";
 import { corsMiddleware } from "./middleware/cors.js";
-import { DEFAULT_SERVER_PORT, DATABASE_PATH } from "../utils/paths.js";
-import { initializeSchema } from "../db/schema.js";
+import { DEFAULT_SERVER_PORT } from "../utils/paths.js";
+import { deleteSession, upsertSession } from "../db/index.js";
 
 export interface ServerOptions {
   port?: number;
@@ -726,23 +725,17 @@ export function createApp() {
         execSync(`kill ${pid} 2>/dev/null || true`, { stdio: "ignore" });
       }
 
-      // Remove from database by id
+      // Remove session file
       try {
-        const db = new Database(DATABASE_PATH);
-        initializeSchema(db);
-        db.prepare("DELETE FROM sessions WHERE id = ?").run(id);
-        db.close();
+        deleteSession(id);
       } catch {
-        // Database cleanup is best-effort
+        // Cleanup is best-effort
       }
       return c.json({ ok: true });
     } catch {
-      // Even if kill fails, clean up database
+      // Even if kill fails, clean up session
       try {
-        const db = new Database(DATABASE_PATH);
-        initializeSchema(db);
-        db.prepare("DELETE FROM sessions WHERE id = ?").run(id);
-        db.close();
+        deleteSession(id);
       } catch {
         // Ignore
       }
@@ -774,20 +767,20 @@ export function createApp() {
       const tmuxTarget = sessionName + ":1.1";
       execSync(`tmux new-session -d -s "${sessionName}" -c "${cwd}" -- claude --dangerously-skip-permissions`, { stdio: "ignore" });
 
-      // Add to database immediately so it shows up in UI
+      // Add session immediately so it shows up in UI
       try {
-        const db = new Database(DATABASE_PATH);
-        initializeSchema(db);
         const id = crypto.randomUUID();
-        console.log("[new-session] Inserting:", { id, cwd, tmuxTarget });
-        db.prepare(`
-          INSERT INTO sessions (id, pid, cwd, tmux_target, state, last_update)
-          VALUES (?, 0, ?, ?, 'idle', ?)
-        `).run(id, cwd, tmuxTarget, Date.now());
-        console.log("[new-session] Insert successful");
-        db.close();
+        console.log("[new-session] Creating session:", { id, cwd, tmuxTarget });
+        upsertSession({
+          id,
+          pid: 0,
+          cwd,
+          tmux_target: tmuxTarget,
+          state: "idle",
+        });
+        console.log("[new-session] Session created successfully");
       } catch (err) {
-        console.error("[new-session] Database insert failed:", err);
+        console.error("[new-session] Session creation failed:", err);
       }
 
       return c.json({ ok: true, session: sessionName });
@@ -891,6 +884,7 @@ export function createApp() {
             color: #aaa;
             cursor: pointer;
             -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -951,10 +945,6 @@ export function createApp() {
           <pre id="terminal">Loading...</pre>
         </div>
         <div class="toolbar">
-          <button onclick="send('1 Enter')"><iconify-icon icon="ph:number-square-one"></iconify-icon></button>
-          <button onclick="send('2 Enter')"><iconify-icon icon="ph:number-square-two"></iconify-icon></button>
-          <button onclick="send('3 Enter')"><iconify-icon icon="ph:number-square-three"></iconify-icon></button>
-          <button onclick="send('4 Enter')"><iconify-icon icon="ph:number-square-four"></iconify-icon></button>
           <button onclick="send('Up')"><iconify-icon icon="ph:arrow-up"></iconify-icon></button>
           <button onclick="send('Down')"><iconify-icon icon="ph:arrow-down"></iconify-icon></button>
           <button onclick="send('Space')"><iconify-icon icon="ph:keyboard"></iconify-icon></button>

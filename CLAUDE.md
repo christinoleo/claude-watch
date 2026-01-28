@@ -6,6 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 The dev server is running at **http://localhost:3000** (started with `bun run dev:serve`).
 
+**tmux session**: `claude-watch-dev-server:1.1` - restart with:
+```bash
+tmux send-keys -t claude-watch-dev-server:1.1 C-c && sleep 0.5 && tmux send-keys -t claude-watch-dev-server:1.1 "bun dev:serve --host 0.0.0.0" Enter
+```
+
 ## Build & Development Commands
 
 ```bash

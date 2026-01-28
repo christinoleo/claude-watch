@@ -25,8 +25,10 @@ export function getPaneTitle(target: string): string | null {
  * @returns The pane contents as a string, or null if capture failed
  */
 export function capturePaneContent(target: string): string | null {
-  // Note: tmux capture-pane works even when not running inside tmux,
-  // as long as tmux server is running. No need to check isInTmux().
+  if (!isInTmux()) {
+    return null;
+  }
+
   try {
     const result = execSync(`tmux capture-pane -p -t "${target}"`, {
       encoding: "utf-8",
@@ -34,38 +36,30 @@ export function capturePaneContent(target: string): string | null {
       timeout: 1000,
     });
     return result;
-  } catch (error) {
-    console.error(`[pane] Failed to capture pane "${target}":`, error instanceof Error ? error.message : error);
+  } catch {
     return null;
   }
 }
 
 /**
  * Check if the pane content shows Claude is actively working.
- * Looks for "Esc to interrupt" or "ctrl+c to interrupt" in the LAST few lines only,
- * since the status line is at the bottom. Checking the whole pane would give
- * false positives from scrollback history.
+ * Looks for "Esc to interrupt" which appears when Claude is processing.
  */
 export function isPaneShowingWorking(content: string): boolean {
   if (!content) return false;
 
-  // Only check the last 5 lines where the status line would appear
-  const lines = content.split('\n');
-  const lastLines = lines.slice(-5).join('\n');
-
-  // "Esc to interrupt" or "ctrl+c to interrupt" appears when Claude is actively working
-  return lastLines.includes("Esc to interrupt") || lastLines.includes("esc to interrupt") ||
-         lastLines.includes("ctrl+c to interrupt") || lastLines.includes("Ctrl+c to interrupt");
+  // "Esc to interrupt" appears when Claude is actively working
+  return content.includes("Esc to interrupt") || content.includes("esc to interrupt");
 }
 
 /**
  * Check if the pane content shows Claude is at the prompt (idle).
- * Claude is idle if the working indicator is NOT present.
+ * Claude is idle if "Esc to interrupt" is NOT present.
  */
 export function isPaneShowingPrompt(content: string): boolean {
   if (!content) return false;
 
-  // If working indicator is present, Claude is still working
+  // If "Esc to interrupt" is present, Claude is still working
   if (isPaneShowingWorking(content)) {
     return false;
   }
@@ -73,3 +67,75 @@ export function isPaneShowingPrompt(content: string): boolean {
   return true;
 }
 
+/**
+ * Detect if the pane shows user interruption or cancellation.
+ * Only detects FRESH signals from the most recent interaction.
+ *
+ * Structure of Claude Code pane:
+ *   ❯ user command           ← interaction start (● or ❯)
+ *     ⎿  Interrupted...      ← signal we're looking for
+ *   ─────────────────────    ← TOP separator
+ *   ❯ [user input]           ← prompt area (may have text)
+ *   ─────────────────────    ← BOTTOM separator
+ *     status line
+ *
+ * Algorithm:
+ * 1. Find the two separators around the prompt area
+ * 2. Scan backwards from TOP separator to find ● or ❯ (interaction start)
+ * 3. Check the slice between interaction start and TOP separator for signals
+ *
+ * @returns 'interrupted' if user pressed Esc during work,
+ *          'declined' if user cancelled a prompt,
+ *          null if no interruption detected
+ */
+export function detectRecentInterruption(content: string): 'interrupted' | 'declined' | null {
+  if (!content) return null;
+
+  const lines = content.split('\n');
+
+  // If there's active UI (menu or working), don't detect old interruptions
+  const bottomLines = lines.slice(-5).join('\n');
+  if (bottomLines.includes('Esc to cancel') || bottomLines.includes('Esc to interrupt')) {
+    return null;
+  }
+
+  // Find the BOTTOM separator (last separator in the pane)
+  let bottomSepIdx = -1;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (lines[i].startsWith('─────')) {
+      bottomSepIdx = i;
+      break;
+    }
+  }
+  if (bottomSepIdx === -1) return null;
+
+  // Find the TOP separator (second-to-last separator, above the prompt)
+  let topSepIdx = -1;
+  for (let i = bottomSepIdx - 1; i >= 0; i--) {
+    if (lines[i].startsWith('─────')) {
+      topSepIdx = i;
+      break;
+    }
+  }
+  if (topSepIdx === -1) return null;
+
+  // Scan backwards from TOP separator to find the interaction start (● or ❯)
+  let interactionStartIdx = -1;
+  const maxScan = Math.max(0, topSepIdx - 15);
+  for (let i = topSepIdx - 1; i >= maxScan; i--) {
+    const line = lines[i];
+    if (line.startsWith('●') || line.startsWith('❯')) {
+      interactionStartIdx = i;
+      break;
+    }
+  }
+  if (interactionStartIdx === -1) return null;
+
+  // Check the slice from interaction start to TOP separator for signals
+  const slice = lines.slice(interactionStartIdx, topSepIdx).join('\n');
+
+  if (slice.includes('Interrupted')) return 'interrupted';
+  if (slice.includes('User declined to answer')) return 'declined';
+
+  return null;
+}

@@ -1,9 +1,6 @@
 import type { Context } from "hono";
 import { streamSSE } from "hono/streaming";
-import Database from "better-sqlite3";
-import { getAllSessions } from "../../db/sessions.js";
-import { DATABASE_PATH } from "../../utils/paths.js";
-import { initializeSchema } from "../../db/schema.js";
+import { getAllSessions } from "../../db/index.js";
 import type { SSEConnectedEvent, SSESessionsEvent, SSEErrorEvent } from "../types.js";
 
 const POLL_INTERVAL = 500;
@@ -26,11 +23,8 @@ export async function streamRoute(c: Context) {
     });
 
     while (running) {
-      let db: Database.Database | null = null;
       try {
-        db = new Database(DATABASE_PATH);
-        initializeSchema(db);
-        const sessions = getAllSessions(db);
+        const sessions = getAllSessions();
 
         const sessionsEvent: SSESessionsEvent = {
           sessions,
@@ -43,15 +37,13 @@ export async function streamRoute(c: Context) {
         });
       } catch {
         const errorEvent: SSEErrorEvent = {
-          error: "Database error",
+          error: "Error reading sessions",
           timestamp: Date.now(),
         };
         await stream.writeSSE({
           event: "error",
           data: JSON.stringify(errorEvent),
         });
-      } finally {
-        db?.close();
       }
 
       await stream.sleep(POLL_INTERVAL);

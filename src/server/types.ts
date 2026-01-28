@@ -1,4 +1,4 @@
-import type { Session } from "../db/sessions.js";
+import type { Session } from "../db/index.js";
 
 export interface SessionsResponse {
   sessions: Session[];

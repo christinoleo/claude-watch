@@ -1,6 +1,6 @@
 import { Command } from "commander";
-import { existsSync } from "fs";
-import { DATABASE_PATH, DEFAULT_SERVER_PORT } from "../utils/paths.js";
+import { existsSync, mkdirSync } from "fs";
+import { CLAUDE_WATCH_DIR, SESSIONS_DIR, DEFAULT_SERVER_PORT } from "../utils/paths.js";
 
 export interface ServeOptions {
   port: string;
@@ -8,12 +8,12 @@ export interface ServeOptions {
 }
 
 export async function runServe(options: ServeOptions): Promise<void> {
-  if (!existsSync(DATABASE_PATH)) {
-    console.error("claude-watch has not been set up yet.");
-    console.error("");
-    console.error("Run the setup wizard first:");
-    console.error("  claude-watch setup");
-    process.exit(1);
+  // Auto-create data directories if needed
+  if (!existsSync(CLAUDE_WATCH_DIR)) {
+    mkdirSync(CLAUDE_WATCH_DIR, { recursive: true });
+  }
+  if (!existsSync(SESSIONS_DIR)) {
+    mkdirSync(SESSIONS_DIR, { recursive: true });
   }
 
   const { startServer } = await import("../server/index.js");

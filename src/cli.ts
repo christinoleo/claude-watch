@@ -8,10 +8,9 @@ import {
   runTui,
   runServe,
 } from "./commands/index.js";
-import { runSetup, runUninstall } from "./setup/index.js";
+import { runSetup, runCleanup } from "./setup/index.js";
 import { DEFAULT_SERVER_PORT } from "./utils/paths.js";
-
-const version = "0.1.0";
+import { VERSION } from "./utils/version.js";
 
 // Deprecation warning helper
 function deprecationWarning(oldFlag: string, newCommand: string): void {
@@ -24,7 +23,7 @@ function deprecationWarning(oldFlag: string, newCommand: string): void {
 program
   .name("claude-watch")
   .description("TUI dashboard for monitoring Claude Code sessions")
-  .version(version);
+  .version(VERSION);
 
 // Register subcommands
 program.addCommand(createServeCommand());
@@ -32,11 +31,10 @@ program.addCommand(createSetupCommand());
 program.addCommand(createUninstallCommand());
 
 // BACKWARD COMPATIBILITY: Support old flags on root command
-// These are kept for users who might still use them
-// Note: --port and --host are NOT defined here to avoid conflicts with subcommands
 program
   .option("--setup", "Run interactive setup wizard (deprecated: use 'setup' command)")
   .option("--uninstall", "Remove hooks (deprecated: use 'uninstall' command)")
+  .option("--cleanup", "Remove hooks (alias for --uninstall)")
   .option("--serve", "Start HTTP server alongside TUI (use with --serve-port, --serve-host)")
   .option("--serve-only", "Run HTTP server only (deprecated: use 'serve' command)")
   .option("--serve-port <number>", "Server port for --serve/--serve-only", String(DEFAULT_SERVER_PORT))
@@ -44,7 +42,7 @@ program
 
 // Hide deprecated options from help
 program.options.forEach((opt) => {
-  if (["--setup", "--uninstall", "--serve-only", "--serve-port", "--serve-host"].includes(opt.long || "")) {
+  if (["--setup", "--uninstall", "--cleanup", "--serve-only", "--serve-port", "--serve-host"].includes(opt.long || "")) {
     opt.hidden = true;
   }
 });
@@ -58,10 +56,12 @@ program.action(async (options) => {
     process.exit(0);
   }
 
-  // Handle deprecated --uninstall flag
-  if (options.uninstall) {
-    deprecationWarning("uninstall", "uninstall");
-    await runUninstall();
+  // Handle deprecated --uninstall or --cleanup flag
+  if (options.uninstall || options.cleanup) {
+    if (options.uninstall) {
+      deprecationWarning("uninstall", "uninstall");
+    }
+    await runCleanup();
     process.exit(0);
   }
 
