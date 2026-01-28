@@ -14,7 +14,7 @@ import type { Session } from "./db/sessions.js";
 const POLL_INTERVAL = 500; // ms
 const BLINK_INTERVAL = 500; // ms
 const CLEANUP_INTERVAL = 5000; // ms
-const PANE_CHECK_INTERVAL = 2000; // ms - check tmux panes for prompt
+const PANE_CHECK_INTERVAL = 500; // ms - check tmux panes for prompt
 
 export function App() {
   const { exit } = useApp();
@@ -109,7 +109,7 @@ export function App() {
           const content = capturePaneContent(session.tmux_target);
           if (!content) continue;
 
-          const isWorking = content.includes("Esc to interrupt") || content.includes("esc to interrupt");
+          const isWorking = content.includes("Esc to interrupt") || content.includes("esc to interrupt") || content.includes("ctrl+c to interrupt") || content.includes("Ctrl+c to interrupt");
 
           if (isWorking && session.state !== "busy") {
             // Pane shows working but state is not busy - set to busy
@@ -129,8 +129,8 @@ export function App() {
             stmt.run(Date.now(), session.id);
           }
         }
-      } catch {
-        // Ignore errors during pane check
+      } catch (error) {
+        console.error("[pane-check] Error during pane check:", error instanceof Error ? error.message : error);
       } finally {
         db?.close();
       }

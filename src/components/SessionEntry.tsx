@@ -63,6 +63,17 @@ function truncatePath(path: string, maxLen: number): string {
   return "…" + path.slice(-(maxLen - 1));
 }
 
+function formatRelativeTime(timestamp: number): string {
+  const now = Date.now();
+  const diff = now - timestamp;
+
+  if (diff < 1000) return "now";
+  if (diff < 60000) return `${Math.floor(diff / 1000)}s`;
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}m`;
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h`;
+  return `${Math.floor(diff / 86400000)}d`;
+}
+
 export function SessionEntry({ item, isSelected, showBlink = true, width }: SessionEntryProps) {
   if (item.type === "claude") {
     return <ClaudeEntry session={item.session} isSelected={isSelected} showBlink={showBlink} width={width} />;
@@ -93,11 +104,12 @@ function ClaudeEntry({
   // Fixed widths for prefix and suffix columns
   const prefixWidth = 4; // selector + bullet + space
   const typeWidth = 8;
+  const timeWidth = 4; // e.g., "now", "5s", "2m", "1h", "3d"
   const totalWidth = width || 100;
   const stateWidth = totalWidth <= 70 ? 10 : 22;
 
   // Calculate flex column widths from remaining space
-  const remainingWidth = totalWidth - prefixWidth - typeWidth - stateWidth;
+  const remainingWidth = totalWidth - prefixWidth - typeWidth - timeWidth - stateWidth;
   const targetWidth = Math.floor(remainingWidth * 0.3);
   const pathWidth = remainingWidth - targetWidth;
 
@@ -124,6 +136,11 @@ function ClaudeEntry({
         <Text dimColor>claude</Text>
       </Box>
 
+      {/* Last update time */}
+      <Box width={timeWidth} justifyContent="flex-end">
+        <Text dimColor>{formatRelativeTime(session.last_update)}</Text>
+      </Box>
+
       {/* State description */}
       <Box width={stateWidth} overflowX="hidden">
         <Text color={stateColor} wrap="truncate-end">{getStateText(session)}</Text>
@@ -146,11 +163,12 @@ function TmuxEntry({
   // Fixed widths for prefix and suffix columns
   const prefixWidth = 4; // selector + bullet + space
   const typeWidth = 8;
+  const timeWidth = 4; // for alignment with ClaudeEntry
   const totalWidth = width || 100;
   const stateWidth = totalWidth <= 70 ? 10 : 22;
 
   // Calculate flex column widths from remaining space
-  const remainingWidth = totalWidth - prefixWidth - typeWidth - stateWidth;
+  const remainingWidth = totalWidth - prefixWidth - typeWidth - timeWidth - stateWidth;
   const targetWidth = Math.floor(remainingWidth * 0.3);
   const pathWidth = remainingWidth - targetWidth;
 
@@ -177,6 +195,11 @@ function TmuxEntry({
       {/* Type column */}
       <Box width={typeWidth}>
         <Text dimColor>tmux</Text>
+      </Box>
+
+      {/* Empty time column for alignment */}
+      <Box width={timeWidth}>
+        <Text dimColor></Text>
       </Box>
 
       {/* Empty state column for alignment */}

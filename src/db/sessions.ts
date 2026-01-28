@@ -7,6 +7,7 @@ export interface Session {
   pid: number;
   cwd: string;
   tmux_target: string | null;
+  pane_title?: string | null; // Enriched from tmux, not stored in DB
   state: SessionState;
   current_action: string | null;
   prompt_text: string | null;
@@ -107,7 +108,8 @@ export function getAllSessions(db: Database.Database): Session[] {
         WHEN 'busy' THEN 4
         ELSE 5
       END,
-      last_update DESC
+      tmux_target ASC,
+      id ASC
   `);
   return stmt.all() as Session[];
 }

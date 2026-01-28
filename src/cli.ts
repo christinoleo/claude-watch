@@ -1,136 +1,83 @@
 #!/usr/bin/env node
 
 import { program } from "commander";
-import { render } from "ink";
-import React from "react";
-import { execSync } from "child_process";
-import { existsSync } from "fs";
-import { App } from "./app.js";
+import {
+  createServeCommand,
+  createSetupCommand,
+  createUninstallCommand,
+  runTui,
+  runServe,
+} from "./commands/index.js";
 import { runSetup, runUninstall } from "./setup/index.js";
-import { closeDatabase } from "./db/index.js";
-import { isInTmux, getTmuxSessionName } from "./tmux/detect.js";
-import { DATABASE_PATH } from "./utils/paths.js";
+import { DEFAULT_SERVER_PORT } from "./utils/paths.js";
 
 const version = "0.1.0";
+
+// Deprecation warning helper
+function deprecationWarning(oldFlag: string, newCommand: string): void {
+  console.warn(
+    `\x1b[33m⚠ Warning: --${oldFlag} is deprecated. Use "claude-watch ${newCommand}" instead.\x1b[0m`
+  );
+  console.warn("");
+}
 
 program
   .name("claude-watch")
   .description("TUI dashboard for monitoring Claude Code sessions")
   .version(version);
 
-const WATCH_SESSION = "watch";
+// Register subcommands
+program.addCommand(createServeCommand());
+program.addCommand(createSetupCommand());
+program.addCommand(createUninstallCommand());
 
+// BACKWARD COMPATIBILITY: Support old flags on root command
+// These are kept for users who might still use them
+// Note: --port and --host are NOT defined here to avoid conflicts with subcommands
 program
-  .option("--setup", "Run interactive setup wizard")
-  .option("--uninstall", "Remove claude-watch hooks and configuration")
-  .action(async (options) => {
-    if (options.setup) {
-      await runSetup();
-      process.exit(0);
-    }
+  .option("--setup", "Run interactive setup wizard (deprecated: use 'setup' command)")
+  .option("--uninstall", "Remove hooks (deprecated: use 'uninstall' command)")
+  .option("--serve", "Start HTTP server alongside TUI (use with --serve-port, --serve-host)")
+  .option("--serve-only", "Run HTTP server only (deprecated: use 'serve' command)")
+  .option("--serve-port <number>", "Server port for --serve/--serve-only", String(DEFAULT_SERVER_PORT))
+  .option("--serve-host <address>", "Server host for --serve/--serve-only", "127.0.0.1");
 
-    if (options.uninstall) {
-      await runUninstall();
-      process.exit(0);
-    }
+// Hide deprecated options from help
+program.options.forEach((opt) => {
+  if (["--setup", "--uninstall", "--serve-only", "--serve-port", "--serve-host"].includes(opt.long || "")) {
+    opt.hidden = true;
+  }
+});
 
-    // Check if running in tmux
-    if (!isInTmux()) {
-      console.error("claude-watch requires tmux to run.");
-      console.error("");
-      console.error("Start tmux first, then run claude-watch:");
-      console.error("  tmux new-session -s watch");
-      console.error("  claude-watch");
-      process.exit(1);
-    }
+// Default action: handle deprecated flags or run TUI
+program.action(async (options) => {
+  // Handle deprecated --setup flag
+  if (options.setup) {
+    deprecationWarning("setup", "setup");
+    await runSetup();
+    process.exit(0);
+  }
 
-    // Check if we're in the correct session
-    const currentSession = getTmuxSessionName();
-    if (currentSession !== WATCH_SESSION) {
-      console.log(`Switching to '${WATCH_SESSION}' session...`);
+  // Handle deprecated --uninstall flag
+  if (options.uninstall) {
+    deprecationWarning("uninstall", "uninstall");
+    await runUninstall();
+    process.exit(0);
+  }
 
-      // Build command to re-invoke claude-watch the same way it was originally called
-      const cwd = process.cwd();
-      // Escape single quotes in args for shell safety
-      const escapeArg = (arg: string) => `'${arg.replace(/'/g, "'\\''")}'`;
-      const originalCmd = process.argv.map(escapeArg).join(" ");
-      const fullCmd = `cd ${escapeArg(cwd)} && ${originalCmd}`;
+  // Handle deprecated --serve-only flag
+  if (options.serveOnly) {
+    deprecationWarning("serve-only", "serve");
+    await runServe({ port: options.servePort, host: options.serveHost });
+    return;
+  }
 
-      try {
-        // Check if watch session exists
-        let sessionExists = false;
-        try {
-          execSync(`tmux has-session -t ${WATCH_SESSION} 2>/dev/null`, { stdio: "ignore" });
-          sessionExists = true;
-        } catch {
-          sessionExists = false;
-        }
-
-        if (sessionExists) {
-          // Check if claude-watch is running in the session
-          let claudeWatchRunning = false;
-          try {
-            const paneCmd = execSync(
-              `tmux list-panes -t ${WATCH_SESSION} -F "#{pane_current_command}"`,
-              { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
-            ).trim();
-            // Check if node or claude-watch is running (our process)
-            claudeWatchRunning = paneCmd.includes("node") || paneCmd.includes("claude-watch");
-          } catch {
-            claudeWatchRunning = false;
-          }
-
-          if (!claudeWatchRunning) {
-            // claude-watch not running, start it in the existing session
-            execSync(`tmux send-keys -t ${WATCH_SESSION} ${escapeArg(fullCmd)} Enter`, { stdio: "inherit" });
-          }
-
-          // Switch to the session
-          execSync(`tmux switch-client -t ${WATCH_SESSION}`, { stdio: "inherit" });
-        } else {
-          // Session doesn't exist, create it with claude-watch running
-          execSync(`tmux new-session -d -s ${WATCH_SESSION} ${escapeArg(fullCmd)}`, { stdio: "inherit" });
-          execSync(`tmux switch-client -t ${WATCH_SESSION}`, { stdio: "inherit" });
-        }
-      } catch (error) {
-        console.error("Failed to switch to watch session:", error);
-        process.exit(1);
-      }
-
-      process.exit(0);
-    }
-
-    // We're in the watch session, run the TUI
-
-    // Check if setup has been run
-    if (!existsSync(DATABASE_PATH)) {
-      console.error("claude-watch has not been set up yet.");
-      console.error("");
-      console.error("Run the setup wizard first:");
-      console.error("  claude-watch --setup");
-      process.exit(1);
-    }
-
-    // Add tmux keybinding dynamically (prefix + W to switch to watch session pane 0.0)
-    try {
-      execSync(`tmux bind-key W run-shell 'tmux switch-client -t ${WATCH_SESSION} && tmux select-window -t ${WATCH_SESSION}:0 && tmux select-pane -t ${WATCH_SESSION}:0.0'`, { stdio: "ignore" });
-    } catch {
-      // Ignore errors - binding might already exist
-    }
-
-    // Enter alternate screen buffer (like vim, htop)
-    process.stdout.write("\x1b[?1049h");
-    process.stdout.write("\x1b[H"); // Move cursor to top-left
-
-    const { waitUntilExit } = render(React.createElement(App));
-
-    try {
-      await waitUntilExit();
-    } finally {
-      // Exit alternate screen buffer, restore previous content
-      process.stdout.write("\x1b[?1049l");
-      closeDatabase();
-    }
+  // Default: run TUI (with optional --serve)
+  await runTui({
+    serve: options.serve,
+    port: options.servePort,
+    host: options.serveHost,
   });
+});
 
 program.parse();

@@ -188,6 +188,14 @@ async function readStdin(): Promise<HookInput> {
 
 async function handleSessionStart(input: HookInput): Promise<void> {
   const db = getDatabase();
+  const tmuxTarget = getTmuxTarget();
+
+  // If starting in a tmux pane, remove any stale session with the same target
+  // This handles the case where Claude was restarted in the same pane
+  if (tmuxTarget) {
+    const deleteStmt = db.prepare("DELETE FROM sessions WHERE tmux_target = ?");
+    deleteStmt.run(tmuxTarget);
+  }
 
   // Start as 'idle' - Claude shows prompt immediately, user needs to give input
   // State changes to 'busy' when PreToolUse fires
@@ -203,7 +211,7 @@ async function handleSessionStart(input: HookInput): Promise<void> {
       last_update = excluded.last_update
   `);
 
-  stmt.run(input.session_id, getClaudePid(), input.cwd, getTmuxTarget(), Date.now());
+  stmt.run(input.session_id, getClaudePid(), input.cwd, tmuxTarget, Date.now());
   db.close();
 }
 
@@ -303,7 +311,8 @@ async function handlePreToolUse(input: HookInput): Promise<void> {
     WHERE id = ?
   `);
 
-  stmt.run(action, Date.now(), input.session_id);
+  const result = stmt.run(action, Date.now(), input.session_id);
+  debugLog(`handlePreToolUse: updated ${result.changes} rows for session ${input.session_id}, action=${action}`);
   db.close();
 }
 
