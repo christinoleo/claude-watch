@@ -1,5 +1,5 @@
 import type { Handle } from '@sveltejs/kit';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { getAllSessions, updateSession } from '$shared/db/index.js';
 import { checkForInterruption, getPaneTitle } from '$shared/tmux/pane.js';
 import type { Session } from '$shared/db/index.js';
@@ -76,7 +76,7 @@ function getEnrichedSessions(): (Session & { pane_title: string | null })[] {
 // Capture tmux pane output
 function capturePaneOutput(target: string): string | null {
 	try {
-		const result = execSync(`tmux capture-pane -t "${target}" -p -S -100`, {
+		const result = execFileSync('tmux', ['capture-pane', '-t', target, '-p', '-S', '-100'], {
 			encoding: 'utf-8',
 			stdio: ['pipe', 'pipe', 'pipe'],
 			timeout: 2000
@@ -224,7 +224,7 @@ class TerminalWebSocketManager {
 			// Extract window target (session:window) from full target (session:window.pane)
 			const windowTarget = target.replace(/\.\d+$/, '');
 			// Use resize-window instead of resize-pane for detached sessions
-			execSync(`tmux resize-window -t "${windowTarget}" -x ${safeCols} -y ${safeRows}`, {
+			execFileSync('tmux', ['resize-window', '-t', windowTarget, '-x', String(safeCols), '-y', String(safeRows)], {
 				stdio: ['pipe', 'pipe', 'pipe'],
 				timeout: 2000
 			});

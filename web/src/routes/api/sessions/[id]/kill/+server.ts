@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { deleteSession } from '$shared/db/index.js';
 
 export const POST: RequestHandler = async ({ params, request }) => {
@@ -9,13 +9,21 @@ export const POST: RequestHandler = async ({ params, request }) => {
 	const { pid, tmux_target } = body;
 
 	try {
-		if (tmux_target) {
+		if (tmux_target && typeof tmux_target === 'string') {
 			// Kill tmux session
 			const session = tmux_target.split(':')[0];
-			execSync(`tmux kill-session -t "${session}" 2>/dev/null || true`, { stdio: 'ignore' });
-		} else if (pid && pid > 0) {
+			try {
+				execFileSync('tmux', ['kill-session', '-t', session], { stdio: 'ignore' });
+			} catch {
+				// Session may not exist - ignore
+			}
+		} else if (typeof pid === 'number' && pid > 0 && Number.isInteger(pid)) {
 			// Kill process directly for non-tmux sessions
-			execSync(`kill ${pid} 2>/dev/null || true`, { stdio: 'ignore' });
+			try {
+				execFileSync('kill', [String(pid)], { stdio: 'ignore' });
+			} catch {
+				// Process may not exist - ignore
+			}
 		}
 
 		// Remove session file

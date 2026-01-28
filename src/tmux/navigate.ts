@@ -1,4 +1,4 @@
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 import { isInTmux } from "./detect.js";
 
 /**
@@ -12,7 +12,7 @@ export function switchToTarget(target: string): boolean {
   }
 
   try {
-    execSync(`tmux switch-client -t "${target}"`, {
+    execFileSync("tmux", ["switch-client", "-t", target], {
       stdio: ["pipe", "pipe", "pipe"],
     });
     return true;
@@ -32,7 +32,7 @@ export function switchToSession(sessionName: string): boolean {
   }
 
   try {
-    execSync(`tmux switch-client -t "${sessionName}"`, {
+    execFileSync("tmux", ["switch-client", "-t", sessionName], {
       stdio: ["pipe", "pipe", "pipe"],
     });
     return true;

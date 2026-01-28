@@ -1,4 +1,4 @@
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 import { isInTmux } from "./detect.js";
 
 /**
@@ -8,7 +8,7 @@ import { isInTmux } from "./detect.js";
  */
 export function getPaneTitle(target: string): string | null {
   try {
-    const result = execSync(`tmux display-message -p -t "${target}" "#{pane_title}"`, {
+    const result = execFileSync("tmux", ["display-message", "-p", "-t", target, "#{pane_title}"], {
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
       timeout: 1000,
@@ -30,7 +30,7 @@ export function capturePaneContent(target: string): string | null {
   }
 
   try {
-    const result = execSync(`tmux capture-pane -p -t "${target}"`, {
+    const result = execFileSync("tmux", ["capture-pane", "-p", "-t", target], {
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
       timeout: 1000,

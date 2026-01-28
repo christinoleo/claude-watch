@@ -1,7 +1,7 @@
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig, type ViteDevServer } from 'vite';
 import { WebSocketServer, WebSocket } from 'ws';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 
 // Dev WebSocket plugin - based on @ubermanu/sveltekit-websocket pattern
 function devWebSocket() {
@@ -80,7 +80,7 @@ function devWebSocket() {
 			// Terminal helpers
 			function capturePaneOutput(target: string): string | null {
 				try {
-					return execSync(`tmux capture-pane -t "${target}" -p -S -100`, {
+					return execFileSync('tmux', ['capture-pane', '-t', target, '-p', '-S', '-100'], {
 						encoding: 'utf-8',
 						stdio: ['pipe', 'pipe', 'pipe'],
 						timeout: 2000
@@ -124,7 +124,7 @@ function devWebSocket() {
 					const safeRows = Math.max(5, Math.min(200, Math.floor(rows)));
 					// Extract window target (session:window) from full target (session:window.pane)
 					const windowTarget = target.replace(/\.\d+$/, '');
-					execSync(`tmux resize-window -t "${windowTarget}" -x ${safeCols} -y ${safeRows}`, {
+					execFileSync('tmux', ['resize-window', '-t', windowTarget, '-x', String(safeCols), '-y', String(safeRows)], {
 						stdio: ['pipe', 'pipe', 'pipe'],
 						timeout: 2000
 					});

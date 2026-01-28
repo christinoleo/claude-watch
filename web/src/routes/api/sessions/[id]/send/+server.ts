@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 
 export const POST: RequestHandler = async ({ params, request }) => {
 	const target = decodeURIComponent(params.id);
@@ -11,10 +11,10 @@ export const POST: RequestHandler = async ({ params, request }) => {
 	try {
 		if (text) {
 			// Send literal text then Enter
-			execSync(`tmux send-keys -t "${target}" -l ${JSON.stringify(text)}`, { stdio: 'ignore' });
-			execSync(`tmux send-keys -t "${target}" Enter`, { stdio: 'ignore' });
+			execFileSync('tmux', ['send-keys', '-t', target, '-l', text], { stdio: 'ignore' });
+			execFileSync('tmux', ['send-keys', '-t', target, 'Enter'], { stdio: 'ignore' });
 		} else {
-			execSync(`tmux send-keys -t "${target}" ${keys}`, { stdio: 'ignore' });
+			execFileSync('tmux', ['send-keys', '-t', target, keys], { stdio: 'ignore' });
 		}
 		return json({ ok: true });
 	} catch {
