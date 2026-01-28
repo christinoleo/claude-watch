@@ -158,6 +158,142 @@ export function createApp() {
             -webkit-tap-highlight-color: rgba(255,255,255,0.2);
           }
           .actions button.danger { background: #c0392b; }
+
+          /* Folder Browser Modal */
+          .folder-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+          }
+          .folder-browser {
+            background: #1a1a1a;
+            border-radius: 12px;
+            width: 94%;
+            max-width: 500px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+          }
+          .fb-header {
+            padding: 16px;
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          }
+          .fb-header h3 { margin: 0; font-size: 18px; }
+          .fb-close {
+            background: transparent;
+            border: none;
+            color: #888;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 4px;
+          }
+          .fb-close:hover { color: #fff; }
+          .fb-breadcrumbs {
+            padding: 12px 16px;
+            background: #111;
+            overflow-x: auto;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 14px;
+            -webkit-overflow-scrolling: touch;
+          }
+          .fb-breadcrumbs span {
+            color: #666;
+            flex-shrink: 0;
+          }
+          .fb-crumb {
+            color: #3498db;
+            cursor: pointer;
+            flex-shrink: 0;
+            padding: 4px 8px;
+            border-radius: 4px;
+          }
+          .fb-crumb:hover { background: #222; }
+          .fb-crumb:last-of-type { color: #fff; cursor: default; }
+          .fb-crumb:last-of-type:hover { background: transparent; }
+          .fb-options {
+            padding: 8px 16px;
+            border-bottom: 1px solid #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #888;
+          }
+          .fb-options input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: #3498db;
+          }
+          .fb-list {
+            flex: 1;
+            overflow-y: auto;
+            min-height: 200px;
+            max-height: 40vh;
+            -webkit-overflow-scrolling: touch;
+          }
+          .fb-folder {
+            padding: 14px 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            border-bottom: 1px solid #222;
+            transition: background 0.1s;
+          }
+          .fb-folder:hover { background: #252525; }
+          .fb-folder:active { background: #333; }
+          .fb-folder iconify-icon { color: #f39c12; font-size: 20px; }
+          .fb-folder span { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+          .fb-folder .fb-arrow { color: #555; font-size: 16px; }
+          .fb-empty {
+            padding: 40px;
+            text-align: center;
+            color: #555;
+          }
+          .fb-loading {
+            padding: 40px;
+            text-align: center;
+            color: #888;
+          }
+          .fb-error {
+            padding: 20px;
+            text-align: center;
+            color: #e74c3c;
+            background: #2a1a1a;
+          }
+          .fb-footer {
+            padding: 16px;
+            border-top: 1px solid #333;
+            display: flex;
+            gap: 10px;
+          }
+          .fb-footer button {
+            flex: 1;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            touch-action: manipulation;
+          }
+          .fb-cancel { background: #333; color: #fff; }
+          .fb-cancel:hover { background: #444; }
+          .fb-select { background: #3498db; color: #fff; }
+          .fb-select:hover { background: #2980b9; }
         </style>
       </head>
       <body>
@@ -366,7 +502,7 @@ export function createApp() {
           }
 
           async function newProject() {
-            showModal('New Project', 'Path:', '', (cwd) => {
+            showFolderBrowser((cwd) => {
               fetch('/api/projects/new-session', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -375,30 +511,114 @@ export function createApp() {
             });
           }
 
-          function showModal(title, label, defaultVal, onSubmit) {
+          function showFolderBrowser(onSelect) {
+            let currentPath = '';
+            let showHidden = false;
+
             const modal = document.createElement('div');
-            modal.id = 'modal';
-            modal.innerHTML = '<div style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:100">' +
-              '<div style="background:#222;padding:20px;border-radius:12px;width:90%;max-width:300px">' +
-                '<div style="font-weight:600;margin-bottom:12px">' + title + '</div>' +
-                '<div style="margin-bottom:8px">' + label + '</div>' +
-                '<input type="text" id="modalInput" value="' + (defaultVal || '').replace(/"/g, '&quot;') + '" style="width:100%;padding:12px;border:1px solid #444;border-radius:6px;background:#111;color:#fff;font-size:16px;box-sizing:border-box">' +
-                '<div style="display:flex;gap:8px;margin-top:12px">' +
-                  '<button onclick="document.getElementById(\\'modal\\').remove()" style="flex:1;padding:12px;background:#444;border:none;border-radius:6px;color:#fff;font-size:16px">Cancel</button>' +
-                  '<button id="modalOk" style="flex:1;padding:12px;background:#3498db;border:none;border-radius:6px;color:#fff;font-size:16px">OK</button>' +
-                '</div>' +
+            modal.id = 'folder-modal';
+            modal.className = 'folder-modal';
+            modal.innerHTML = '<div class="folder-browser">' +
+              '<div class="fb-header">' +
+                '<h3>Select Project Folder</h3>' +
+                '<button class="fb-close" onclick="closeFolderBrowser()"><iconify-icon icon="ph:x"></iconify-icon></button>' +
+              '</div>' +
+              '<div class="fb-breadcrumbs" id="fb-breadcrumbs"></div>' +
+              '<div class="fb-options">' +
+                '<input type="checkbox" id="fb-hidden">' +
+                '<label for="fb-hidden">Show hidden folders</label>' +
+              '</div>' +
+              '<div class="fb-list" id="fb-list"><div class="fb-loading"><iconify-icon icon="ph:spinner" class="spin"></iconify-icon> Loading...</div></div>' +
+              '<div class="fb-footer">' +
+                '<button class="fb-cancel" onclick="closeFolderBrowser()">Cancel</button>' +
+                '<button class="fb-select" id="fb-select">Select This Folder</button>' +
               '</div>' +
             '</div>';
             document.body.appendChild(modal);
-            const input = document.getElementById('modalInput');
-            input.focus();
-            input.select();
-            document.getElementById('modalOk').onclick = () => {
-              const val = input.value.trim();
+
+            // Close on escape key
+            const escHandler = (e) => { if (e.key === 'Escape') closeFolderBrowser(); };
+            document.addEventListener('keydown', escHandler);
+
+            // Close on backdrop click
+            modal.onclick = (e) => { if (e.target === modal) closeFolderBrowser(); };
+
+            window.closeFolderBrowser = () => {
+              document.removeEventListener('keydown', escHandler);
               modal.remove();
-              if (val) onSubmit(val);
             };
-            input.onkeypress = (e) => { if (e.key === 'Enter') document.getElementById('modalOk').click(); };
+
+            // Toggle hidden folders
+            document.getElementById('fb-hidden').onchange = (e) => {
+              showHidden = e.target.checked;
+              loadFolder(currentPath);
+            };
+
+            // Select current folder
+            document.getElementById('fb-select').onclick = () => {
+              if (currentPath) {
+                closeFolderBrowser();
+                onSelect(currentPath);
+              }
+            };
+
+            // Navigate to folder
+            window.navigateFolder = (path) => {
+              loadFolder(path);
+            };
+
+            async function loadFolder(path) {
+              const list = document.getElementById('fb-list');
+              const crumbs = document.getElementById('fb-breadcrumbs');
+              list.innerHTML = '<div class="fb-loading"><iconify-icon icon="ph:spinner" class="spin"></iconify-icon> Loading...</div>';
+
+              try {
+                const url = '/api/browse' + (path ? '?path=' + encodeURIComponent(path) : '') + (showHidden ? (path ? '&' : '?') + 'showHidden=true' : '');
+                const res = await fetch(url);
+                const data = await res.json();
+
+                if (data.error) {
+                  list.innerHTML = '<div class="fb-error"><iconify-icon icon="ph:warning"></iconify-icon> ' + data.error + '</div>';
+                  return;
+                }
+
+                currentPath = data.current;
+
+                // Build breadcrumbs
+                const parts = data.current.split('/').filter(Boolean);
+                let breadcrumbHtml = '<span class="fb-crumb" onclick="navigateFolder(\\'/\\')"><iconify-icon icon="ph:house"></iconify-icon></span>';
+                let buildPath = '';
+                for (let i = 0; i < parts.length; i++) {
+                  buildPath += '/' + parts[i];
+                  const isLast = i === parts.length - 1;
+                  breadcrumbHtml += '<span>/</span>';
+                  if (isLast) {
+                    breadcrumbHtml += '<span class="fb-crumb">' + parts[i] + '</span>';
+                  } else {
+                    breadcrumbHtml += '<span class="fb-crumb" onclick="navigateFolder(\\'' + buildPath.replace(/'/g, "\\\\'") + '\\')">' + parts[i] + '</span>';
+                  }
+                }
+                crumbs.innerHTML = breadcrumbHtml;
+
+                // Build folder list
+                if (data.folders.length === 0) {
+                  list.innerHTML = '<div class="fb-empty"><iconify-icon icon="ph:folder-open"></iconify-icon><br>No subfolders</div>';
+                } else {
+                  list.innerHTML = data.folders.map(f =>
+                    '<div class="fb-folder" onclick="navigateFolder(\\'' + f.path.replace(/'/g, "\\\\'") + '\\')">' +
+                      '<iconify-icon icon="ph:folder-fill"></iconify-icon>' +
+                      '<span>' + f.name + '</span>' +
+                      '<iconify-icon icon="ph:caret-right" class="fb-arrow"></iconify-icon>' +
+                    '</div>'
+                  ).join('');
+                }
+              } catch (e) {
+                list.innerHTML = '<div class="fb-error"><iconify-icon icon="ph:warning"></iconify-icon> Failed to load folder</div>';
+              }
+            }
+
+            // Start with home directory
+            loadFolder('');
           }
 
           function openSession(target) {
@@ -431,6 +651,60 @@ export function createApp() {
       return c.json({ ok: true });
     } catch {
       return c.json({ error: "Failed to send keys" }, 500);
+    }
+  });
+
+  // Browse directories for folder picker
+  app.get("/api/browse", async (c) => {
+    const os = await import("os");
+    const fs = await import("fs");
+    const path = await import("path");
+
+    let targetPath = c.req.query("path") || os.homedir();
+    const showHidden = c.req.query("showHidden") === "true";
+
+    // Normalize and resolve path
+    if (targetPath.startsWith("~")) {
+      targetPath = targetPath.replace("~", os.homedir());
+    }
+    targetPath = path.resolve(targetPath);
+
+    try {
+      const stat = fs.statSync(targetPath);
+      if (!stat.isDirectory()) {
+        return c.json({ error: "Not a directory" }, 400);
+      }
+
+      const entries = fs.readdirSync(targetPath, { withFileTypes: true });
+      const folders = entries
+        .filter((e) => {
+          if (!e.isDirectory()) return false;
+          if (!showHidden && e.name.startsWith(".")) return false;
+          return true;
+        })
+        .map((e) => ({
+          name: e.name,
+          path: path.join(targetPath, e.name),
+        }))
+        .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+
+      const parent = path.dirname(targetPath);
+      const isRoot = targetPath === "/" || targetPath === parent;
+
+      return c.json({
+        current: targetPath,
+        parent: isRoot ? null : parent,
+        isRoot,
+        folders,
+      });
+    } catch (err: any) {
+      if (err.code === "ENOENT") {
+        return c.json({ error: "Directory not found" }, 404);
+      }
+      if (err.code === "EACCES") {
+        return c.json({ error: "Permission denied" }, 403);
+      }
+      return c.json({ error: "Failed to read directory" }, 500);
     }
   });
 
