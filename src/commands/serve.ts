@@ -1,6 +1,10 @@
 import { Command } from "commander";
 import { existsSync, mkdirSync } from "fs";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
 import { CLAUDE_WATCH_DIR, SESSIONS_DIR, DEFAULT_SERVER_PORT } from "../utils/paths.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export interface ServeOptions {
   port: string;
@@ -16,12 +20,21 @@ export async function runServe(options: ServeOptions): Promise<void> {
     mkdirSync(SESSIONS_DIR, { recursive: true });
   }
 
-  const { startServer } = await import("../server/index.js");
-  await startServer({
-    port: parseInt(options.port),
-    host: options.host,
-  });
-  // Keep process running (server is running)
+  // Path to built SvelteKit server
+  const serverPath = join(__dirname, "..", "web", "index.js");
+
+  if (!existsSync(serverPath)) {
+    console.error(`SvelteKit server not found at: ${serverPath}`);
+    console.error("Run 'bun run build' first.");
+    process.exit(1);
+  }
+
+  // Set environment variables for SvelteKit server
+  process.env.PORT = options.port;
+  process.env.HOST = options.host;
+
+  // Import and run the SvelteKit server (it auto-starts on import)
+  await import(serverPath);
 }
 
 export function createServeCommand(): Command {

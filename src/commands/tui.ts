@@ -226,8 +226,8 @@ export async function runTui(options: TuiOptions): Promise<void> {
 
   // Start HTTP server if --serve flag is provided
   if (options.serve) {
-    const { startServer } = await import("../server/index.js");
-    await startServer({ port: parseInt(options.port), host: options.host });
+    const { runServe } = await import("./serve.js");
+    await runServe({ port: options.port, host: options.host });
   }
 
   // Enter alternate screen buffer (like vim, htop)
