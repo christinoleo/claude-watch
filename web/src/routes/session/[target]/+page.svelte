@@ -48,7 +48,8 @@
 		if (innerWidth <= 0 || innerHeight <= 0) return null;
 
 		const { width: charW, height: charH } = measureFont();
-		const cols = Math.floor(innerWidth / charW);
+		// Subtract 1 col for safety margin (font rendering varies across devices)
+		const cols = Math.floor(innerWidth / charW) - 1;
 		const rows = Math.floor(innerHeight / charH);
 
 		if (cols < 10 || rows < 3) return null;
