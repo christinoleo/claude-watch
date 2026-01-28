@@ -8,6 +8,10 @@
 	let { children } = $props();
 
 	let drawerOpen = $state(false);
+	let sidebarElement: HTMLElement | null = $state(null);
+	let touchStartX = 0;
+	let touchCurrentX = 0;
+	let isDragging = false;
 
 	// Show sidebar only on session detail pages (not on main page)
 	const showSidebar = $derived($page.url.pathname.startsWith('/session/'));
@@ -24,6 +28,34 @@
 	function closeDrawer() {
 		drawerOpen = false;
 	}
+
+	function handleTouchStart(e: TouchEvent) {
+		touchStartX = e.touches[0].clientX;
+		touchCurrentX = touchStartX;
+		isDragging = true;
+	}
+
+	function handleTouchMove(e: TouchEvent) {
+		if (!isDragging || !sidebarElement) return;
+		touchCurrentX = e.touches[0].clientX;
+		const diff = touchCurrentX - touchStartX;
+		// Only allow dragging left (negative diff)
+		if (diff < 0) {
+			sidebarElement.style.transform = `translateX(${diff}px)`;
+		}
+	}
+
+	function handleTouchEnd() {
+		if (!isDragging || !sidebarElement) return;
+		isDragging = false;
+		const diff = touchCurrentX - touchStartX;
+		// If swiped left more than 80px, close the drawer
+		if (diff < -80) {
+			closeDrawer();
+		}
+		// Reset transform to let CSS handle it
+		sidebarElement.style.transform = '';
+	}
 </script>
 
 <svelte:head>
@@ -34,7 +66,14 @@
 
 {#if showSidebar}
 	<div class="app-shell">
-		<aside class="sidebar" class:open={drawerOpen}>
+		<aside
+			class="sidebar"
+			class:open={drawerOpen}
+			bind:this={sidebarElement}
+			ontouchstart={handleTouchStart}
+			ontouchmove={handleTouchMove}
+			ontouchend={handleTouchEnd}
+		>
 			<SessionsSidebar onSelect={closeDrawer} />
 		</aside>
 
@@ -86,6 +125,7 @@
 	.sidebar {
 		width: 250px;
 		flex-shrink: 0;
+		background: hsl(var(--background));
 		border-right: 1px solid hsl(var(--border));
 		overflow: hidden;
 	}
@@ -114,6 +154,9 @@
 			z-index: 60;
 			transform: translateX(-100%);
 			transition: transform 0.2s ease;
+			background: hsl(var(--background) / 0.85);
+			backdrop-filter: blur(12px);
+			-webkit-backdrop-filter: blur(12px);
 		}
 
 		.sidebar.open {
@@ -149,7 +192,7 @@
 			left: 0;
 			right: 0;
 			bottom: 0;
-			background: rgba(0, 0, 0, 0.7);
+			background: rgba(0, 0, 0, 0.4);
 			z-index: 55;
 			border: none;
 			cursor: pointer;
