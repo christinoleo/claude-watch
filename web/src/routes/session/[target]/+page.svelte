@@ -222,8 +222,18 @@
 			<span>Enter</span>
 		</button>
 		<button onclick={() => sendKeys('C-l')}>
+			<iconify-icon icon="mdi:refresh"></iconify-icon>
+			<span>Redraw</span>
+		</button>
+		<button onclick={async () => {
+			await fetch(`/api/sessions/${encodeURIComponent(target)}/send`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ text: '/clear' })
+			});
+		}}>
 			<iconify-icon icon="mdi:broom"></iconify-icon>
-			<span>Clear</span>
+			<span>/clear</span>
 		</button>
 		<button class="danger" onclick={() => sendKeys('C-c')}>
 			<iconify-icon icon="mdi:cancel"></iconify-icon>
