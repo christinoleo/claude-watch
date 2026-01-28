@@ -75,7 +75,20 @@
 	}
 
 	function copyTmuxCmd() {
-		navigator.clipboard.writeText(`tmux attach -t "${target.split(':')[0]}"`);
+		const cmd = `tmux attach -t "${target.split(':')[0]}"`;
+		if (navigator.clipboard?.writeText) {
+			navigator.clipboard.writeText(cmd);
+		} else {
+			// Fallback for non-secure contexts (HTTP)
+			const textarea = document.createElement('textarea');
+			textarea.value = cmd;
+			textarea.style.position = 'fixed';
+			textarea.style.opacity = '0';
+			document.body.appendChild(textarea);
+			textarea.select();
+			document.execCommand('copy');
+			document.body.removeChild(textarea);
+		}
 	}
 </script>
 
