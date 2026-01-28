@@ -14,6 +14,7 @@
 	let textInput = $state('');
 	let showConfirmKill = $state(false);
 	let outputElement: HTMLPreElement | null = $state(null);
+	let userScrolledUp = $state(false);
 
 	onMount(() => {
 		sessionStore.connect();
@@ -25,9 +26,17 @@
 		sessionStore.disconnect();
 	});
 
-	// Auto-scroll to bottom when output changes
+	// Track if user has scrolled up from bottom
+	function handleScroll() {
+		if (!outputElement) return;
+		const { scrollTop, scrollHeight, clientHeight } = outputElement;
+		// Consider "at bottom" if within 50px of the bottom
+		userScrolledUp = scrollHeight - scrollTop - clientHeight > 50;
+	}
+
+	// Auto-scroll to bottom only if user hasn't scrolled up
 	$effect(() => {
-		if (outputElement && terminalStore.output) {
+		if (outputElement && terminalStore.output && !userScrolledUp) {
 			outputElement.scrollTop = outputElement.scrollHeight;
 		}
 	});
@@ -96,7 +105,7 @@
 		</div>
 	</header>
 
-	<pre class="output" bind:this={outputElement}>{terminalStore.output}</pre>
+	<pre class="output" bind:this={outputElement} onscroll={handleScroll}>{terminalStore.output}</pre>
 
 	<div class="toolbar">
 		<button onclick={() => sendKeys('Up')}>
