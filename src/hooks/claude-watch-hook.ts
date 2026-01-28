@@ -234,6 +234,7 @@ function handleUserPromptSubmit(input: HookInput): void {
   const session = readSession(input.session_id);
   if (!session) return;
 
+  session.tmux_target = getTmuxTarget() ?? session.tmux_target;
   session.state = "busy";
   session.current_action = "Thinking...";
   session.last_update = Date.now();
@@ -244,6 +245,7 @@ function handleStop(input: HookInput): void {
   const session = readSession(input.session_id);
   if (!session) return;
 
+  session.tmux_target = getTmuxTarget() ?? session.tmux_target;
   session.state = "idle";
   session.current_action = null;
   session.last_update = Date.now();
@@ -254,6 +256,7 @@ function handlePermissionRequest(input: HookInput): void {
   const session = readSession(input.session_id);
   if (!session) return;
 
+  session.tmux_target = getTmuxTarget() ?? session.tmux_target;
   session.state = "waiting";
   session.current_action = "Waiting...";
   session.last_update = Date.now();
@@ -264,6 +267,7 @@ function handleNotificationIdle(input: HookInput): void {
   const session = readSession(input.session_id);
   if (!session) return;
 
+  session.tmux_target = getTmuxTarget() ?? session.tmux_target;
   session.state = "idle";
   session.current_action = null;
   session.last_update = Date.now();
@@ -274,6 +278,7 @@ function handleNotificationPermission(input: HookInput): void {
   const session = readSession(input.session_id);
   if (!session) return;
 
+  session.tmux_target = getTmuxTarget() ?? session.tmux_target;
   session.state = "permission";
   session.current_action = "Waiting for permission";
   session.last_update = Date.now();
@@ -284,6 +289,7 @@ function handleNotificationElicitation(input: HookInput): void {
   const session = readSession(input.session_id);
   if (!session) return;
 
+  session.tmux_target = getTmuxTarget() ?? session.tmux_target;
   session.state = "waiting";
   session.current_action = "Waiting for input";
   session.last_update = Date.now();
@@ -294,6 +300,7 @@ function handlePreToolUse(input: HookInput): void {
   const session = readSession(input.session_id);
   if (!session) return;
 
+  session.tmux_target = getTmuxTarget() ?? session.tmux_target;
   session.state = "busy";
   session.current_action = input.tool_name
     ? formatToolAction(input.tool_name, input.tool_input)
@@ -306,6 +313,7 @@ function handlePostToolUse(input: HookInput): void {
   const session = readSession(input.session_id);
   if (!session) return;
 
+  session.tmux_target = getTmuxTarget() ?? session.tmux_target;
   session.state = "busy";
   session.current_action = null;
   session.last_update = Date.now();
@@ -316,6 +324,7 @@ function handlePostToolUseFailure(input: HookInput): void {
   const session = readSession(input.session_id);
   if (!session) return;
 
+  session.tmux_target = getTmuxTarget() ?? session.tmux_target;
   session.state = "busy";
   session.current_action = null;
   session.last_update = Date.now();
