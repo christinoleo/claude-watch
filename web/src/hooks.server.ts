@@ -238,8 +238,11 @@ class TerminalWebSocketManager {
 const sessionsWsManager = new SessionsWebSocketManager();
 const terminalWsManager = new TerminalWebSocketManager();
 
-// Map to store WebSocket data (type and target)
-const wsDataMap = new WeakMap<WebSocket, { type: 'sessions' | 'terminal'; target?: string }>();
+// Map to store WebSocket data (type, target, and client wrapper for proper cleanup)
+const wsDataMap = new WeakMap<
+	WebSocket,
+	{ type: 'sessions' | 'terminal'; target?: string; client: WebSocketClient }
+>();
 
 // Handle function for SvelteKit
 export const handle: Handle = async ({ event, resolve }) => {
@@ -283,12 +286,13 @@ export const websocket = {
 		const data = ws.data;
 		if (!data) return;
 
-		const client = {
+		const client: WebSocketClient = {
 			send: (msg: string) => ws.send(msg),
 			close: () => ws.close()
 		};
 
-		wsDataMap.set(ws, data);
+		// Store client reference for proper cleanup in close handler
+		wsDataMap.set(ws, { ...data, client });
 
 		if (data.type === 'sessions') {
 			sessionsWsManager.addClient(client);
@@ -315,15 +319,11 @@ export const websocket = {
 		const data = wsDataMap.get(ws);
 		if (!data) return;
 
-		const client = {
-			send: (msg: string) => ws.send(msg),
-			close: () => ws.close()
-		};
-
+		// Use the same client reference that was stored in open()
 		if (data.type === 'sessions') {
-			sessionsWsManager.removeClient(client);
+			sessionsWsManager.removeClient(data.client);
 		} else if (data.type === 'terminal') {
-			terminalWsManager.removeClient(client, data.target);
+			terminalWsManager.removeClient(data.client, data.target);
 		}
 
 		wsDataMap.delete(ws);

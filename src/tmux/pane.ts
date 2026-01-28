@@ -43,13 +43,17 @@ export function capturePaneContent(target: string): string | null {
 
 /**
  * Check if the pane content shows Claude is actively working.
- * Looks for "Esc to interrupt" which appears when Claude is processing.
+ * Looks for interrupt hints which appear when Claude is processing.
  */
 export function isPaneShowingWorking(content: string): boolean {
   if (!content) return false;
 
-  // "Esc to interrupt" appears when Claude is actively working
-  return content.includes("Esc to interrupt") || content.includes("esc to interrupt");
+  // These patterns appear when Claude is actively working
+  return (
+    content.includes("Esc to interrupt") ||
+    content.includes("esc to interrupt") ||
+    content.includes("ctrl+c to interrupt")
+  );
 }
 
 /**
@@ -95,7 +99,11 @@ export function detectRecentInterruption(content: string): 'interrupted' | 'decl
 
   // If there's active UI (menu or working), don't detect old interruptions
   const bottomLines = lines.slice(-5).join('\n');
-  if (bottomLines.includes('Esc to cancel') || bottomLines.includes('Esc to interrupt')) {
+  if (
+    bottomLines.includes('Esc to cancel') ||
+    bottomLines.includes('Esc to interrupt') ||
+    bottomLines.includes('ctrl+c to interrupt')
+  ) {
     return null;
   }
 
