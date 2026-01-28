@@ -9,6 +9,14 @@
 	let browserIsRoot = $state(false);
 	let browserParent = $state<string | null>(null);
 
+	// Project tree node type
+	interface ProjectNode {
+		cwd: string;
+		sessions: Session[];
+		children: ProjectNode[];
+		depth: number;
+	}
+
 	// Group sessions by project (cwd)
 	const sessionsByProject = $derived(() => {
 		const groups = new Map<string, Session[]>();
@@ -31,6 +39,64 @@
 		}
 		return [...projects].sort();
 	});
+
+	// Build project tree with parent/child relationships
+	const projectTree = $derived(() => {
+		const projects = allProjects();
+		const sessionsMap = sessionsByProject();
+
+		// Sort by path length (shorter = potential parents)
+		const sorted = [...projects].sort((a, b) => a.length - b.length);
+
+		const roots: ProjectNode[] = [];
+		const nodeMap = new Map<string, ProjectNode>();
+
+		for (const cwd of sorted) {
+			const node: ProjectNode = {
+				cwd,
+				sessions: sessionsMap.get(cwd) || [],
+				children: [],
+				depth: 0
+			};
+
+			// Find parent (longest matching prefix that's also a project)
+			let parent: ProjectNode | null = null;
+			for (const potentialParent of sorted) {
+				if (potentialParent === cwd) continue;
+				if (cwd.startsWith(potentialParent + '/')) {
+					const parentNode = nodeMap.get(potentialParent);
+					if (parentNode && (!parent || potentialParent.length > parent.cwd.length)) {
+						parent = parentNode;
+					}
+				}
+			}
+
+			if (parent) {
+				node.depth = parent.depth + 1;
+				parent.children.push(node);
+			} else {
+				roots.push(node);
+			}
+
+			nodeMap.set(cwd, node);
+		}
+
+		return roots;
+	});
+
+	// Flatten tree for rendering with depth info
+	function flattenTree(nodes: ProjectNode[]): ProjectNode[] {
+		const result: ProjectNode[] = [];
+		for (const node of nodes) {
+			result.push(node);
+			if (node.children.length > 0) {
+				result.push(...flattenTree(node.children));
+			}
+		}
+		return result;
+	}
+
+	const flatProjects = $derived(() => flattenTree(projectTree()));
 
 	onMount(() => {
 		sessionStore.loadSavedProjects();
@@ -133,27 +199,30 @@
 
 	<p class="count">{sessionStore.sessions.length} session{sessionStore.sessions.length !== 1 ? 's' : ''}</p>
 
-	{#if allProjects().length === 0}
+	{#if flatProjects().length === 0}
 		<div class="empty">No sessions yet. Click + to add a project.</div>
 	{:else}
-		{#each allProjects() as cwd}
-			{@const sessions = sessionsByProject().get(cwd) || []}
-			{@const color = getProjectColor(cwd)}
-			<div class="project-group">
+		{#each flatProjects() as project}
+			{@const color = getProjectColor(project.cwd)}
+			{@const isNested = project.depth > 0}
+			<div class="project-group" class:nested={isNested} style="margin-left: {project.depth * 24}px">
 				<div class="project-header" style="background: {color}20; color: {color}">
+					{#if isNested}
+						<span class="nest-indicator">└</span>
+					{/if}
 					<span class="dot" style="background: {color}"></span>
-					<span class="name">{getProjectName(cwd)}</span>
-					<span class="count-badge">{sessions.length}</span>
+					<span class="name">{getProjectName(project.cwd)}</span>
+					<span class="count-badge">{project.sessions.length}</span>
 					<div class="spacer"></div>
-					<button onclick={() => newSessionInProject(cwd)} title="New Session">
+					<button onclick={() => newSessionInProject(project.cwd)} title="New Session">
 						<iconify-icon icon="mdi:plus"></iconify-icon>
 					</button>
-					<button class="delete" onclick={() => deleteProject(cwd)} title="Delete Project">
+					<button class="delete" onclick={() => deleteProject(project.cwd)} title="Delete Project">
 						<iconify-icon icon="mdi:delete"></iconify-icon>
 					</button>
 				</div>
 				<div class="project-sessions">
-					{#each sessions as session}
+					{#each project.sessions as session}
 						{#if session.tmux_target}
 							<a href="/session/{encodeURIComponent(session.tmux_target)}" class="session {session.state}">
 								<span class="state" style="background: {stateColor(session.state)}"></span>
@@ -317,6 +386,17 @@
 
 	.project-group {
 		margin-bottom: 20px;
+	}
+
+	.project-group.nested {
+		margin-bottom: 12px;
+		margin-top: -8px;
+	}
+
+	.nest-indicator {
+		font-family: monospace;
+		opacity: 0.5;
+		margin-right: 4px;
 	}
 
 	.project-header {

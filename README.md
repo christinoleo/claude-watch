@@ -25,13 +25,13 @@ https://github.com/user-attachments/assets/74d77eee-191e-4224-aa87-9985efd1ace7
 ### From npm (recommended)
 
 ```bash
-npm install -g @johnrobinsn/claude-watch
+npm install -g @aknakos/claude-watch
 ```
 
 ### From source
 
 ```bash
-git clone https://github.com/johnrobinsn/claude-watch.git
+git clone https://github.com/aknakos/claude-watch.git
 cd claude-watch
 npm install
 npm run build
@@ -179,7 +179,7 @@ CREATE TABLE sessions (
 
 ```bash
 # Clone the repository
-git clone https://github.com/johnrobinsn/claude-watch.git
+git clone https://github.com/aknakos/claude-watch.git
 cd claude-watch
 
 # Install dependencies
@@ -259,7 +259,7 @@ claude-watch/
 ### From npm
 
 ```bash
-npm update -g @johnrobinsn/claude-watch
+npm update -g @aknakos/claude-watch
 claude-watch setup  # Reinstall hooks with updated paths
 ```
 
@@ -290,7 +290,7 @@ To fully uninstall the package:
 claude-watch --cleanup
 
 # Uninstall the npm package
-npm uninstall -g @johnrobinsn/claude-watch
+npm uninstall -g @aknakos/claude-watch
 
 # Remove data directory (optional)
 rm -rf ~/.claude-watch

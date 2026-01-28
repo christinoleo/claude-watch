@@ -7,7 +7,7 @@ This document outlines the process for releasing a new version of claude-watch.
 The package is published to npm under the scoped name:
 
 ```
-@johnrobinsn/claude-watch
+@aknakos/claude-watch
 ```
 
 ## Semantic Versioning
@@ -127,7 +127,7 @@ npm publish --access public
 
 ### Scoped Package Under Your Username
 
-The package is published under your npm username scope `@johnrobinsn`. No organization setup is required - you can publish scoped packages under your own username.
+The package is published under your npm username scope `@aknakos`. No organization setup is required - you can publish scoped packages under your own username.
 
 ### Update package.json
 
@@ -135,7 +135,7 @@ Ensure `package.json` has the scoped name:
 
 ```json
 {
-  "name": "@johnrobinsn/claude-watch",
+  "name": "@aknakos/claude-watch",
   "version": "0.1.0",
   "publishConfig": {
     "access": "public"
@@ -155,14 +155,14 @@ npm login
 ### 1. Verify npm Publication
 
 ```bash
-npm view @johnrobinsn/claude-watch
+npm view @aknakos/claude-watch
 ```
 
 ### 2. Test Installation
 
 ```bash
 # In a clean directory
-npm install -g @johnrobinsn/claude-watch
+npm install -g @aknakos/claude-watch
 claude-watch --version
 claude-watch --help
 ```
@@ -209,11 +209,11 @@ npm login
 
 ### "Package name too similar to existing package"
 
-The scoped name `@johnrobinsn/claude-watch` should avoid this issue.
+The scoped name `@aknakos/claude-watch` should avoid this issue.
 
 ### "You do not have permission to publish"
 
-Ensure you're logged in as `johnrobinsn` on npm.
+Ensure you're logged in as `aknakos` on npm.
 
 ### "This package requires a paid subscription"
 

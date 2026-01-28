@@ -41,7 +41,11 @@
 	}
 
 	async function sendText() {
-		if (!textInput.trim()) return;
+		if (!textInput.trim()) {
+			// Empty input: just send Enter key
+			await sendKeys('Enter');
+			return;
+		}
 		await fetch(`/api/sessions/${encodeURIComponent(target)}/send`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
