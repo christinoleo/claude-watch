@@ -77,8 +77,10 @@
 
 	function autoResize() {
 		if (!textareaElement) return;
-		textareaElement.style.height = 'auto';
-		textareaElement.style.height = Math.min(textareaElement.scrollHeight, 150) + 'px';
+		// Reset to single row to measure actual content height
+		textareaElement.style.height = '0';
+		const newHeight = Math.max(48, Math.min(textareaElement.scrollHeight, 150));
+		textareaElement.style.height = newHeight + 'px';
 	}
 
 	async function killSession() {
@@ -335,6 +337,7 @@
 
 	.input-row {
 		display: flex;
+		align-items: flex-end;
 		gap: 8px;
 		padding: 12px 16px;
 		background: #111;
@@ -344,20 +347,26 @@
 	.input-row textarea {
 		flex: 1;
 		min-width: 0;
+		height: 48px;
 		background: #222;
 		color: #fff;
 		border: 1px solid #333;
-		padding: 14px 16px;
+		padding: 12px 16px;
 		border-radius: 8px;
 		font-size: 14px;
 		font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Monaco, 'Cascadia Code', monospace;
-		line-height: 1.4;
+		line-height: 1.5;
 		resize: none;
 		overflow-y: auto;
 		overflow-x: hidden;
 		max-height: 150px;
-		white-space: pre-wrap;
 		word-wrap: break-word;
+		box-sizing: border-box;
+		scrollbar-width: none; /* Firefox */
+	}
+
+	.input-row textarea::-webkit-scrollbar {
+		display: none; /* Chrome, Safari */
 	}
 
 	.input-row textarea:focus {
