@@ -12,3 +12,7 @@ private/
 
 # Beads issue tracking (local)
 .beads/
+AGENTS.md
+
+# Bun lockfile (using npm upstream)
+bun.lock
