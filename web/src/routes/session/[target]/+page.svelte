@@ -146,17 +146,32 @@
 	<div class="toolbar">
 		<button onclick={() => sendKeys('Up')}>
 			<iconify-icon icon="mdi:arrow-up"></iconify-icon>
+			<span>Up</span>
 		</button>
 		<button onclick={() => sendKeys('Down')}>
 			<iconify-icon icon="mdi:arrow-down"></iconify-icon>
+			<span>Down</span>
 		</button>
-		<button onclick={() => sendKeys('Space')}>Space</button>
-		<button onclick={() => sendKeys('Tab')}>Tab</button>
+		<button onclick={() => sendKeys('Space')}>
+			<iconify-icon icon="mdi:keyboard-space"></iconify-icon>
+			<span>Space</span>
+		</button>
+		<button onclick={() => sendKeys('Tab')}>
+			<iconify-icon icon="mdi:keyboard-tab"></iconify-icon>
+			<span>Tab</span>
+		</button>
 		<button onclick={() => sendKeys('Enter')}>
 			<iconify-icon icon="mdi:keyboard-return"></iconify-icon>
+			<span>Enter</span>
 		</button>
-		<button onclick={() => sendKeys('C-l')}>Clear</button>
-		<button class="danger" onclick={() => sendKeys('C-c')}>Ctrl-C</button>
+		<button onclick={() => sendKeys('C-l')}>
+			<iconify-icon icon="mdi:broom"></iconify-icon>
+			<span>Clear</span>
+		</button>
+		<button class="danger" onclick={() => sendKeys('C-c')}>
+			<iconify-icon icon="mdi:cancel"></iconify-icon>
+			<span>Ctrl-C</span>
+		</button>
 	</div>
 
 	<form class="input-row" onsubmit={(e) => { e.preventDefault(); sendText(); }}>
@@ -294,28 +309,37 @@
 
 	.toolbar {
 		display: flex;
-		flex-wrap: wrap;
-		gap: 8px;
-		padding: 12px 16px;
+		gap: 6px;
+		padding: 8px 12px;
 		background: #111;
 		border-top: 1px solid #222;
 	}
 
 	.toolbar button {
+		flex: 1;
 		background: #333;
 		color: #fff;
 		border: none;
-		padding: 12px 16px;
-		border-radius: 8px;
+		padding: 6px 4px;
+		border-radius: 6px;
 		cursor: pointer;
-		font-size: 16px;
-		white-space: nowrap;
 		display: flex;
+		flex-direction: column;
 		align-items: center;
 		justify-content: center;
-		gap: 4px;
-		min-height: 44px;
-		flex: 1 1 auto;
+		gap: 2px;
+		min-width: 0;
+	}
+
+	.toolbar button iconify-icon {
+		font-size: 18px;
+	}
+
+	.toolbar button span {
+		font-size: 9px;
+		text-transform: uppercase;
+		letter-spacing: 0.3px;
+		opacity: 0.8;
 	}
 
 	.toolbar button:hover {
@@ -327,12 +351,13 @@
 	}
 
 	.toolbar button.danger {
-		background: #991b1b;
-		color: #fff;
+		background: #7f1d1d;
+		color: #fca5a5;
 	}
 
 	.toolbar button.danger:hover {
-		background: #b91c1c;
+		background: #991b1b;
+		color: #fff;
 	}
 
 	.input-row {
