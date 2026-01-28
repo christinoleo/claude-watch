@@ -139,3 +139,21 @@ export function detectRecentInterruption(content: string): 'interrupted' | 'decl
 
   return null;
 }
+
+/**
+ * Check if a tmux pane shows a recent interruption/cancellation.
+ * Returns the session update to apply, or null if no update needed.
+ *
+ * @param tmuxTarget - The tmux target in format "session:window.pane"
+ * @returns Session fields to update if interruption detected, null otherwise
+ */
+export function checkForInterruption(tmuxTarget: string): { state: 'idle'; current_action: null; prompt_text: null } | null {
+  const content = capturePaneContent(tmuxTarget);
+  if (!content) return null;
+
+  const interruption = detectRecentInterruption(content);
+  if (interruption) {
+    return { state: 'idle', current_action: null, prompt_text: null };
+  }
+  return null;
+}

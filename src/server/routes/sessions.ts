@@ -1,26 +1,21 @@
 import { Hono } from "hono";
 import { getAllSessions, getSession, updateSession } from "../../db/index.js";
-import { capturePaneContent, isPaneShowingWorking, getPaneTitle } from "../../tmux/pane.js";
+import { checkForInterruption, getPaneTitle } from "../../tmux/pane.js";
 import type { SessionsResponse, SessionResponse, ErrorResponse } from "../types.js";
 
 export const sessionsRoutes = new Hono();
 
-// Sync session state with actual tmux pane content
+// Sync session state by detecting interruptions (user pressed Escape)
+// Hooks are authoritative for all other state transitions
 function syncSessionStates(): void {
   const sessions = getAllSessions().filter((s) => s.tmux_target);
 
   for (const session of sessions) {
     if (!session.tmux_target) continue;
 
-    const content = capturePaneContent(session.tmux_target);
-    if (!content) continue;
-
-    const isWorking = isPaneShowingWorking(content);
-
-    if (isWorking && session.state !== "busy") {
-      updateSession(session.id, { state: "busy", current_action: "Working..." });
-    } else if (!isWorking && session.state === "busy") {
-      updateSession(session.id, { state: "idle", current_action: null });
+    const update = checkForInterruption(session.tmux_target);
+    if (update && session.state !== "idle") {
+      updateSession(session.id, update);
     }
   }
 }
