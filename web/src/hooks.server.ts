@@ -2,6 +2,7 @@ import type { Handle } from '@sveltejs/kit';
 import { execFileSync } from 'child_process';
 import { getAllSessions, updateSession } from '$shared/db/index.js';
 import { checkForInterruption, getPaneTitle } from '$shared/tmux/pane.js';
+import { resizeTmuxWindow } from '$shared/tmux/resize.js';
 import type { Session } from '$shared/db/index.js';
 import { sessionWatcher } from '$shared/server/watcher.js';
 

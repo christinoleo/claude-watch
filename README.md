@@ -144,8 +144,8 @@ claude-watch uses [Claude Code hooks](https://docs.anthropic.com/en/docs/claude-
 
 Hooks don't fire when the user presses Escape to interrupt Claude mid-response. To handle this, claude-watch polls tmux panes every 2 seconds:
 
-- If `"Esc to interrupt"` is visible → Claude is working (busy)
-- If `"Esc to interrupt"` is NOT visible → Claude is idle
+- If interrupt hint is visible (`"Esc to interrupt"` or `"ctrl+c to interrupt"`) → Claude is working (busy)
+- If no interrupt hint is visible → Claude is idle
 
 This bidirectional sync ensures the dashboard accurately reflects the true state even when hooks don't fire.
 

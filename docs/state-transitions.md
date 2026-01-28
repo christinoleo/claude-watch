@@ -86,7 +86,7 @@ Claude Code doesn't fire hooks when the user presses Escape to interrupt or canc
 
 To avoid false positives from older history in the scrollback, the detection algorithm:
 
-1. **Skip if active UI**: If "Esc to cancel" or "Esc to interrupt" appears in the bottom 5 lines, there's an active menu or Claude is working - don't detect old interruptions
+1. **Skip if active UI**: If "Esc to cancel", "Esc to interrupt", or "ctrl+c to interrupt" appears in the bottom 5 lines, there's an active menu or Claude is working - don't detect old interruptions
 2. **Find prompt separators**: Locate the two `─────` separator lines around the prompt area
 3. **Find interaction start**: Scan backwards from the TOP separator to find a line starting with `●` (Claude output) or `❯` (user prompt)
 4. **Check the slice**: Look for "Interrupted" or "User declined" only in the slice between the interaction start and the TOP separator
