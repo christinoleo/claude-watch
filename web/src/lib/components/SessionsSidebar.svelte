@@ -5,7 +5,6 @@
 	import { inputInjection } from '$lib/stores/input-injection.svelte';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
-	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import BeadsPanel from './BeadsPanel.svelte';
 	import type { BeadsIssue } from '$lib/stores/beads.svelte';
 
@@ -80,7 +79,7 @@
 		{/if}
 	</div>
 
-	<ScrollArea class="flex-1">
+	<div class="scroll-content">
 		<div class="sessions-panel">
 			<button class="panel-header" onclick={toggleSessionsExpanded} type="button">
 				<iconify-icon icon="mdi:console"></iconify-icon>
@@ -127,7 +126,7 @@
 				onSelect={handleIssueSelect}
 			/>
 		{/if}
-	</ScrollArea>
+	</div>
 </nav>
 
 <style>
@@ -135,6 +134,7 @@
 		display: flex;
 		flex-direction: column;
 		height: 100%;
+		overflow: hidden;
 		background: hsl(var(--card));
 	}
 
@@ -169,8 +169,10 @@
 		flex-shrink: 0;
 	}
 
-	.sessions-panel {
-		/* Container for collapsible sessions */
+	.scroll-content {
+		flex: 1;
+		overflow-y: auto;
+		min-height: 0;
 	}
 
 	.panel-header {

@@ -2,6 +2,7 @@ import type { Handle } from '@sveltejs/kit';
 import {
 	SessionsWsManager,
 	TerminalWsManager,
+	BeadsWsManager,
 	handleWsMessage,
 	parseWsPath,
 	resizePane,
@@ -11,11 +12,12 @@ import {
 // Global manager instances with config
 const sessionsWsManager = new SessionsWsManager({ debug: true });
 const terminalWsManager = new TerminalWsManager({ debug: true });
+const beadsWsManager = new BeadsWsManager({ debug: true });
 
-// Map to store WebSocket data (type, target, and client wrapper for proper cleanup)
+// Map to store WebSocket data (type, target/project, and client wrapper for proper cleanup)
 const wsDataMap = new WeakMap<
 	WebSocket,
-	{ type: 'sessions' | 'terminal'; target?: string; client: WsClient }
+	{ type: 'sessions' | 'terminal' | 'beads'; target?: string; project?: string; client: WsClient }
 >();
 
 // Handle function for SvelteKit
@@ -29,7 +31,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		upgradeHeader?.toLowerCase() === 'websocket'
 	) {
 		const url = new URL(event.request.url);
-		const parsed = parseWsPath(url.pathname);
+		const parsed = parseWsPath(url.pathname, url.searchParams);
 
 		if (parsed) {
 			// @ts-expect-error - platform is provided by svelte-adapter-bun
@@ -45,7 +47,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 // WebSocket handlers for svelte-adapter-bun
 export const websocket = {
-	open(ws: WebSocket & { data?: { type: 'sessions' | 'terminal'; target?: string } }) {
+	open(ws: WebSocket & { data?: { type: 'sessions' | 'terminal' | 'beads'; target?: string; project?: string } }) {
 		const data = ws.data;
 		if (!data) return;
 
@@ -64,6 +66,8 @@ export const websocket = {
 			accepted = sessionsWsManager.addClient(client);
 		} else if (data.type === 'terminal' && data.target) {
 			accepted = terminalWsManager.addClient(client, data.target);
+		} else if (data.type === 'beads' && data.project) {
+			accepted = beadsWsManager.addClient(client, data.project);
 		}
 
 		// If not accepted (max clients reached), close the connection
@@ -97,6 +101,8 @@ export const websocket = {
 			sessionsWsManager.removeClient(data.client);
 		} else if (data.type === 'terminal') {
 			terminalWsManager.removeClient(data.client, data.target);
+		} else if (data.type === 'beads') {
+			beadsWsManager.removeClient(data.client, data.project);
 		}
 
 		wsDataMap.delete(ws);

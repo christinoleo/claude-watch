@@ -5,6 +5,7 @@
 	import { onDestroy } from 'svelte';
 	import { terminalStore } from '$lib/stores/terminal.svelte';
 	import { sessionStore, stateColor } from '$lib/stores/sessions.svelte';
+	import { inputInjection } from '$lib/stores/input-injection.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as AlertDialog from '$lib/components/ui/alert-dialog';
 
@@ -68,6 +69,22 @@
 	// Connect to terminal when target changes (including initial mount)
 	$effect(() => {
 		terminalStore.connect(target);
+	});
+
+	// Watch for issue IDs to inject into input
+	$effect(() => {
+		const issueId = inputInjection.pendingIssueId;
+		if (issueId) {
+			// Append issue ID to input (with space if there's existing text)
+			textInput = textInput ? textInput + ' ' + issueId : issueId;
+			inputInjection.clear();
+			// Focus textarea and trigger resize
+			if (textareaElement) {
+				textareaElement.focus();
+				// Use timeout to ensure state is updated before resize
+				setTimeout(autoResize, 0);
+			}
+		}
 	});
 
 	onDestroy(() => {
@@ -164,6 +181,7 @@
 
 <svelte:head>
 	<title>{currentSession?.pane_title || target || 'Session'}</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 	<link rel="preconnect" href="https://fonts.googleapis.com" />
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
 	<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />

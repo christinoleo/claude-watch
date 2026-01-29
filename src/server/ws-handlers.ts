@@ -569,14 +569,336 @@ export function handleWsMessage(
 }
 
 // ============================================================================
+// Beads Types and Helpers
+// ============================================================================
+
+export interface BeadsIssue {
+	id: string;
+	title: string;
+	status: 'open' | 'in_progress' | 'blocked' | 'deferred' | 'closed';
+	priority: number;
+	issue_type: string;
+	owner?: string;
+	assignee?: string;
+	created_at?: string;
+	updated_at?: string;
+	dependencies?: { depends_on_id: string; type: string }[];
+}
+
+export interface BeadsMessage {
+	type: 'issues' | 'connected';
+	issues: BeadsIssue[];
+	project: string;
+	timestamp: number;
+}
+
+/**
+ * Fetch beads issues using bd CLI
+ */
+export function getBeadsIssues(projectPath: string): BeadsIssue[] {
+	try {
+		const result = execFileSync('bd', ['list', '--json'], {
+			encoding: 'utf-8',
+			cwd: projectPath,
+			stdio: ['pipe', 'pipe', 'pipe'],
+			timeout: 5000
+		});
+		return JSON.parse(result) as BeadsIssue[];
+	} catch {
+		return [];
+	}
+}
+
+// ============================================================================
+// Beads Watcher (per-project file watching)
+// ============================================================================
+
+import { existsSync, statSync } from 'fs';
+import { join } from 'path';
+
+interface BeadsWatcherCallback {
+	(): void;
+}
+
+class BeadsProjectWatcher {
+	private subscribers = new Map<string, Set<BeadsWatcherCallback>>();
+	private pollTimers = new Map<string, ReturnType<typeof setInterval>>();
+	private lastMtime = new Map<string, number>();
+	private readonly pollInterval = 1000;
+
+	/**
+	 * Subscribe to changes in a project's beads issues
+	 */
+	subscribe(projectPath: string, callback: BeadsWatcherCallback): () => void {
+		if (!this.subscribers.has(projectPath)) {
+			this.subscribers.set(projectPath, new Set());
+		}
+		this.subscribers.get(projectPath)!.add(callback);
+
+		// Start watching if first subscriber for this project
+		if (this.subscribers.get(projectPath)!.size === 1) {
+			this.startWatching(projectPath);
+		}
+
+		return () => {
+			const subs = this.subscribers.get(projectPath);
+			if (subs) {
+				subs.delete(callback);
+				if (subs.size === 0) {
+					this.stopWatching(projectPath);
+					this.subscribers.delete(projectPath);
+				}
+			}
+		};
+	}
+
+	private startWatching(projectPath: string): void {
+		const issuesFile = join(projectPath, '.beads', 'issues.jsonl');
+
+		// Get initial mtime
+		try {
+			if (existsSync(issuesFile)) {
+				this.lastMtime.set(projectPath, statSync(issuesFile).mtimeMs);
+			}
+		} catch {
+			// File may not exist
+		}
+
+		console.log('[beads-watcher] Started watching', projectPath);
+
+		const timer = setInterval(() => {
+			this.checkForChanges(projectPath, issuesFile);
+		}, this.pollInterval);
+
+		this.pollTimers.set(projectPath, timer);
+	}
+
+	private stopWatching(projectPath: string): void {
+		const timer = this.pollTimers.get(projectPath);
+		if (timer) {
+			clearInterval(timer);
+			this.pollTimers.delete(projectPath);
+		}
+		this.lastMtime.delete(projectPath);
+		console.log('[beads-watcher] Stopped watching', projectPath);
+	}
+
+	private checkForChanges(projectPath: string, issuesFile: string): void {
+		try {
+			if (!existsSync(issuesFile)) {
+				// File was deleted, notify
+				if (this.lastMtime.has(projectPath)) {
+					this.lastMtime.delete(projectPath);
+					this.notifySubscribers(projectPath);
+				}
+				return;
+			}
+
+			const currentMtime = statSync(issuesFile).mtimeMs;
+			const lastMtime = this.lastMtime.get(projectPath);
+
+			if (lastMtime === undefined || currentMtime !== lastMtime) {
+				this.lastMtime.set(projectPath, currentMtime);
+				if (lastMtime !== undefined) {
+					// Only notify on changes, not initial read
+					console.log('[beads-watcher] Issues changed in', projectPath);
+					this.notifySubscribers(projectPath);
+				}
+			}
+		} catch {
+			// Ignore errors during polling
+		}
+	}
+
+	private notifySubscribers(projectPath: string): void {
+		const subs = this.subscribers.get(projectPath);
+		if (subs) {
+			for (const callback of subs) {
+				try {
+					callback();
+				} catch (error) {
+					console.error('[beads-watcher] Subscriber error:', error);
+				}
+			}
+		}
+	}
+}
+
+export const beadsWatcher = new BeadsProjectWatcher();
+
+// ============================================================================
+// Beads WebSocket Manager
+// ============================================================================
+
+export class BeadsWsManager {
+	private clients = new Map<string, Set<WsClient>>();
+	private unsubscribes = new Map<string, () => void>();
+	private lastHash = new Map<string, string>();
+	private config: Required<WsConfig>;
+	private totalClients = 0;
+
+	constructor(config?: WsConfig) {
+		this.config = { ...DEFAULT_CONFIG, ...config };
+	}
+
+	getStats(): { totalClients: number; projects: number } {
+		return {
+			totalClients: this.totalClients,
+			projects: this.clients.size
+		};
+	}
+
+	addClient(client: WsClient, projectPath: string): boolean {
+		if (!projectPath) return false;
+
+		if (!this.clients.has(projectPath)) {
+			this.clients.set(projectPath, new Set());
+		}
+
+		this.clients.get(projectPath)!.add(client);
+		this.totalClients++;
+
+		log(
+			{
+				level: 'debug',
+				component: 'beads',
+				message: 'Client connected',
+				data: { project: projectPath, total: this.totalClients }
+			},
+			this.config
+		);
+
+		// Subscribe to watcher if first client for this project
+		if (this.clients.get(projectPath)!.size === 1 && !this.unsubscribes.has(projectPath)) {
+			console.log('[ws:beads] First client for project, subscribing to watcher');
+			const unsub = beadsWatcher.subscribe(projectPath, () =>
+				this.broadcastIfChanged(projectPath)
+			);
+			this.unsubscribes.set(projectPath, unsub);
+		}
+
+		// Send initial issues
+		this.sendToClient(client, this.createMessage(projectPath, 'connected'));
+		return true;
+	}
+
+	removeClient(client: WsClient, projectPath?: string): void {
+		if (projectPath) {
+			const projectClients = this.clients.get(projectPath);
+			if (projectClients && projectClients.delete(client)) {
+				this.totalClients--;
+
+				if (projectClients.size === 0) {
+					this.clients.delete(projectPath);
+					this.lastHash.delete(projectPath);
+
+					const unsub = this.unsubscribes.get(projectPath);
+					if (unsub) {
+						unsub();
+						this.unsubscribes.delete(projectPath);
+					}
+				}
+			}
+		} else {
+			// Find and remove from any project
+			for (const [project, clients] of this.clients) {
+				if (clients.delete(client)) {
+					this.totalClients--;
+					if (clients.size === 0) {
+						this.clients.delete(project);
+						this.lastHash.delete(project);
+
+						const unsub = this.unsubscribes.get(project);
+						if (unsub) {
+							unsub();
+							this.unsubscribes.delete(project);
+						}
+					}
+					break;
+				}
+			}
+		}
+	}
+
+	private createMessage(projectPath: string, type: 'issues' | 'connected'): BeadsMessage {
+		const issues = getBeadsIssues(projectPath);
+		return { type, issues, project: projectPath, timestamp: Date.now() };
+	}
+
+	private broadcastIfChanged(projectPath: string): void {
+		const message = this.createMessage(projectPath, 'issues');
+		const hash = JSON.stringify(message.issues);
+
+		if (hash === this.lastHash.get(projectPath)) {
+			return;
+		}
+
+		this.lastHash.set(projectPath, hash);
+		const data = JSON.stringify(message);
+
+		const clients = this.clients.get(projectPath);
+		if (clients) {
+			console.log('[ws:beads] Broadcasting to', clients.size, 'clients for', projectPath);
+			for (const client of clients) {
+				if (!this.sendToClient(client, message, data)) {
+					clients.delete(client);
+					this.totalClients--;
+				}
+			}
+
+			if (clients.size === 0) {
+				this.clients.delete(projectPath);
+				this.lastHash.delete(projectPath);
+
+				const unsub = this.unsubscribes.get(projectPath);
+				if (unsub) {
+					unsub();
+					this.unsubscribes.delete(projectPath);
+				}
+			}
+		}
+	}
+
+	private sendToClient(client: WsClient, _message: BeadsMessage, data?: string): boolean {
+		try {
+			if (!client.isOpen()) return false;
+
+			if (client.getBufferedAmount) {
+				const buffered = client.getBufferedAmount();
+				if (buffered > 64 * 1024) {
+					return false;
+				}
+			}
+
+			client.send(data ?? JSON.stringify(_message));
+			return true;
+		} catch {
+			return false;
+		}
+	}
+}
+
+// ============================================================================
 // URL Parsing
 // ============================================================================
 
-export function parseWsPath(
-	pathname: string
-): { type: 'sessions' } | { type: 'terminal'; target: string } | null {
+export type WsPathResult =
+	| { type: 'sessions' }
+	| { type: 'terminal'; target: string }
+	| { type: 'beads'; project: string }
+	| null;
+
+export function parseWsPath(pathname: string, searchParams?: URLSearchParams): WsPathResult {
 	if (pathname === '/api/sessions/stream') {
 		return { type: 'sessions' };
+	}
+
+	if (pathname === '/api/beads/stream') {
+		const project = searchParams?.get('project');
+		if (project) {
+			return { type: 'beads', project: decodeURIComponent(project) };
+		}
+		return null;
 	}
 
 	const termMatch = pathname.match(/^\/api\/sessions\/([^/]+)\/stream$/);
