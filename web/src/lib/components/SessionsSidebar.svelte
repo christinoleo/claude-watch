@@ -2,15 +2,27 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { sessionStore, stateColor } from '$lib/stores/sessions.svelte';
+	import { inputInjection } from '$lib/stores/input-injection.svelte';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
+	import BeadsPanel from './BeadsPanel.svelte';
+	import type { BeadsIssue } from '$lib/stores/beads.svelte';
 
 	interface Props {
 		onSelect?: () => void;
 	}
 
 	let { onSelect }: Props = $props();
+
+	let sessionsExpanded = $state(true);
+
+	function toggleSessionsExpanded() {
+		sessionsExpanded = !sessionsExpanded;
+	}
+
+	// Check if we're in a session view
+	const isSessionView = $derived($page.url.pathname.startsWith('/session/'));
 
 	const currentTarget = $derived(
 		$page.params.target ? decodeURIComponent($page.params.target) : null
@@ -21,7 +33,7 @@
 	);
 
 	// Extract project name from cwd (last folder in path)
-	const projectName = $derived(() => {
+	const projectName = $derived.by(() => {
 		const cwd = currentSession?.cwd || currentSession?.git_root;
 		if (!cwd) return null;
 		const parts = cwd.split('/').filter(Boolean);
@@ -44,14 +56,22 @@
 			goto(`/session/${encodeURIComponent(tmuxTarget)}`);
 		}
 	}
+
+	function handleIssueSelect(issue: BeadsIssue) {
+		if (isSessionView) {
+			// In session view: inject ID into input
+			inputInjection.inject(issue.id);
+			onSelect?.(); // Close drawer on mobile
+		}
+		// On main page: just view (future: show details)
+	}
 </script>
 
 <nav class="sidebar-sessions">
 	<div class="sidebar-header">
 		<a href="/" class="home-link" onclick={onSelect}>
 			<iconify-icon icon="mdi:folder-outline"></iconify-icon>
-			<span>{projectName() || 'Sessions'}</span>
-			<Badge variant="secondary" class="ml-auto">{sessionStore.sessions.length}</Badge>
+			<span>{projectName || 'Sessions'}</span>
 		</a>
 		{#if currentSession?.cwd}
 			<Button variant="ghost" size="icon-sm" onclick={newSession} title="New session in this project" class="new-session-btn">
@@ -61,30 +81,52 @@
 	</div>
 
 	<ScrollArea class="flex-1">
-		<div class="sessions-list">
-			{#each sessionStore.sessions as session (session.id)}
-				{#if session.tmux_target}
-					<a
-						href="/session/{encodeURIComponent(session.tmux_target)}"
-						class="session-item"
-						class:active={session.tmux_target === currentTarget || session.id === currentTarget}
-						onclick={onSelect}
-					>
-						<span class="icon-slot">
-							<span class="state-dot" style="background: {stateColor(session.state)}"></span>
-						</span>
-						<div class="session-info">
-							<div class="session-name">{session.pane_title || session.tmux_target}</div>
-							{#if session.current_action}
-								<div class="session-action">{session.current_action}</div>
-							{/if}
-						</div>
-					</a>
-				{/if}
-			{:else}
-				<div class="empty">No active sessions</div>
-			{/each}
+		<div class="sessions-panel">
+			<button class="panel-header" onclick={toggleSessionsExpanded} type="button">
+				<iconify-icon icon="mdi:console"></iconify-icon>
+				<span>Sessions</span>
+				<Badge variant="outline" class="ml-auto session-count">{sessionStore.sessions.length}</Badge>
+				<iconify-icon
+					icon={sessionsExpanded ? 'mdi:chevron-down' : 'mdi:chevron-right'}
+					class="chevron"
+				></iconify-icon>
+			</button>
+
+			{#if sessionsExpanded}
+				<div class="sessions-list">
+					{#each sessionStore.sessions as session (session.id)}
+						{#if session.tmux_target}
+							<a
+								href="/session/{encodeURIComponent(session.tmux_target)}"
+								class="session-item"
+								class:active={session.tmux_target === currentTarget || session.id === currentTarget}
+								onclick={onSelect}
+							>
+								<span class="icon-slot">
+									<span class="state-dot" style="background: {stateColor(session.state)}"></span>
+								</span>
+								<div class="session-info">
+									<div class="session-name">{session.pane_title || session.tmux_target}</div>
+									{#if session.current_action}
+										<div class="session-action">{session.current_action}</div>
+									{/if}
+								</div>
+							</a>
+						{/if}
+					{:else}
+						<div class="empty">No active sessions</div>
+					{/each}
+				</div>
+			{/if}
 		</div>
+
+		<!-- Beads Issues Panel -->
+		{#if currentSession?.beads_enabled}
+			<BeadsPanel
+				project={currentSession.git_root}
+				onSelect={handleIssueSelect}
+			/>
+		{/if}
 	</ScrollArea>
 </nav>
 
@@ -97,6 +139,9 @@
 	}
 
 	.sidebar-header {
+		display: flex;
+		align-items: center;
+		gap: 8px;
 		padding: 12px;
 		border-bottom: 1px solid hsl(var(--border));
 	}
@@ -105,6 +150,8 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
+		flex: 1;
+		min-width: 0;
 		color: hsl(var(--foreground));
 		text-decoration: none;
 		font-weight: 600;
@@ -119,12 +166,45 @@
 	}
 
 	.new-session-btn {
-		margin-top: 8px;
+		flex-shrink: 0;
+	}
+
+	.sessions-panel {
+		/* Container for collapsible sessions */
+	}
+
+	.panel-header {
+		display: flex;
+		align-items: center;
+		gap: 8px;
 		width: 100%;
+		padding: 12px;
+		border: none;
+		background: transparent;
+		color: inherit;
+		font-family: inherit;
+		font-size: 14px;
+		font-weight: 600;
+		cursor: pointer;
+		text-align: left;
+	}
+
+	.panel-header:hover {
+		background: hsl(var(--accent) / 0.5);
+	}
+
+	.panel-header :global(.session-count) {
+		font-size: 11px;
+		padding: 2px 6px;
+	}
+
+	.chevron {
+		font-size: 18px;
+		color: hsl(var(--muted-foreground));
 	}
 
 	.sessions-list {
-		padding: 8px 12px;
+		padding: 0 12px 12px;
 	}
 
 	.session-item {
