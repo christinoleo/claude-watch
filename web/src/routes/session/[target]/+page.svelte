@@ -248,10 +248,6 @@
 			<iconify-icon icon="mdi:keyboard-tab"></iconify-icon>
 			<span>Tab</span>
 		</Button>
-		<Button variant="secondary" size="toolbar" class="flex-1" onclick={() => sendKeys('Enter')}>
-			<iconify-icon icon="mdi:keyboard-return"></iconify-icon>
-			<span>Enter</span>
-		</Button>
 		<Button variant="secondary" size="toolbar" class="flex-1" onclick={() => sendKeys('C-l')}>
 			<iconify-icon icon="mdi:eraser"></iconify-icon>
 			<span>Ctrl-L</span>
