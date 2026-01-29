@@ -2,21 +2,10 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig, type ViteDevServer } from 'vite';
 import { WebSocketServer, WebSocket } from 'ws';
-import { execFileSync } from 'child_process';
 
-// Dev WebSocket plugin - based on @ubermanu/sveltekit-websocket pattern
+// Dev WebSocket plugin - uses shared handlers
 function devWebSocket() {
 	let wss: WebSocketServer;
-
-	// Sessions stream state
-	const sessionsClients = new Set<WebSocket>();
-	let lastHash = '';
-	let unsubscribe: (() => void) | null = null;
-
-	// Terminal stream state
-	const terminalClients = new Map<string, Set<WebSocket>>();
-	const terminalTimers = new Map<string, ReturnType<typeof setInterval>>();
-	const terminalLastOutput = new Map<string, string>();
 
 	return {
 		name: 'dev-websocket',
@@ -24,104 +13,31 @@ function devWebSocket() {
 		async configureServer(server: ViteDevServer) {
 			if (!server.httpServer) return;
 
-			// Import server modules
-			const { sessionWatcher } = await import('../src/server/watcher.js');
-			const { getAllSessions, updateSession } = await import('../src/db/index.js');
-			const { checkForInterruption, getPaneTitle } = await import('../src/tmux/pane.js');
-			const { resizeTmuxWindow } = await import('../src/tmux/resize.js');
+			// Import shared handlers
+			const {
+				SessionsWsManager,
+				TerminalWsManager,
+				handleWsMessage,
+				parseWsPath,
+				resizePane
+			} = await import('../src/server/ws-handlers.js');
+			type WsClient = import('../src/server/ws-handlers.js').WsClient;
 
-			// Session helpers
-			function getEnrichedSessions() {
-				// Sync states first
-				for (const s of getAllSessions().filter((s) => s.tmux_target)) {
-					if (!s.tmux_target) continue;
-					const update = checkForInterruption(s.tmux_target);
-					if (update && s.state !== 'idle') updateSession(s.id, update);
-				}
+			// Create manager instances with debug enabled for dev
+			const sessionsWsManager = new SessionsWsManager({ debug: true });
+			const terminalWsManager = new TerminalWsManager({ debug: true });
 
-				// Deduplicate by tmux_target
-				const sessions = getAllSessions();
-				const byTarget = new Map<string, (typeof sessions)[0]>();
-				const noTarget: typeof sessions = [];
+			// Track WebSocket -> target mapping for cleanup
+			const wsTargets = new WeakMap<WebSocket, string>();
 
-				for (const s of sessions) {
-					if (!s.tmux_target) {
-						noTarget.push(s);
-						continue;
-					}
-					const existing = byTarget.get(s.tmux_target);
-					if (!existing || s.last_update > existing.last_update) {
-						byTarget.set(s.tmux_target, s);
-					}
-				}
-
-				return [...byTarget.values(), ...noTarget].map((s) => ({
-					...s,
-					pane_title: s.tmux_target ? getPaneTitle(s.tmux_target) : null
-				}));
-			}
-
-			function broadcastSessions() {
-				const sessions = getEnrichedSessions();
-				const hash = JSON.stringify(sessions);
-				if (hash === lastHash) return;
-				lastHash = hash;
-
-				const msg = JSON.stringify({
-					type: 'sessions',
-					sessions,
-					count: sessions.length,
-					timestamp: Date.now()
-				});
-
-				for (const ws of sessionsClients) {
-					if (ws.readyState === WebSocket.OPEN) ws.send(msg);
-				}
-			}
-
-			// Terminal helpers
-			function capturePaneOutput(target: string): string | null {
-				try {
-					return execFileSync('tmux', ['capture-pane', '-t', target, '-p', '-S', '-100'], {
-						encoding: 'utf-8',
-						stdio: ['pipe', 'pipe', 'pipe'],
-						timeout: 2000
-					});
-				} catch {
-					return null;
-				}
-			}
-
-			function startTerminalPolling(target: string) {
-				if (terminalTimers.has(target)) return;
-				const timer = setInterval(() => {
-					const output = capturePaneOutput(target) ?? '';
-					const last = terminalLastOutput.get(target) ?? '';
-					if (output === last) return;
-					terminalLastOutput.set(target, output);
-
-					const msg = JSON.stringify({ type: 'output', output, timestamp: Date.now() });
-					const clients = terminalClients.get(target);
-					if (clients) {
-						for (const ws of clients) {
-							if (ws.readyState === WebSocket.OPEN) ws.send(msg);
-						}
-					}
-				}, 200);
-				terminalTimers.set(target, timer);
-			}
-
-			function stopTerminalPolling(target: string) {
-				const timer = terminalTimers.get(target);
-				if (timer) {
-					clearInterval(timer);
-					terminalTimers.delete(target);
-					terminalLastOutput.delete(target);
-				}
-			}
-
-			function resizePane(target: string, cols: number, rows: number) {
-				resizeTmuxWindow(target, cols, rows);
+			// Create WsClient wrapper for ws library
+			function createClient(ws: WebSocket): WsClient {
+				return {
+					send: (msg: string) => ws.send(msg),
+					isOpen: () => ws.readyState === WebSocket.OPEN,
+					close: () => ws.close(),
+					getBufferedAmount: () => ws.bufferedAmount
+				};
 			}
 
 			// Create WebSocket server with compression enabled
@@ -129,84 +45,50 @@ function devWebSocket() {
 
 			wss.on('connection', (ws, req) => {
 				const url = new URL(req.url || '', 'http://localhost');
+				const parsed = parseWsPath(url.pathname);
 
-				// Sessions stream: /api/sessions/stream
-				if (url.pathname === '/api/sessions/stream') {
-					sessionsClients.add(ws);
-
-					// Start watcher on first client
-					if (sessionsClients.size === 1 && !unsubscribe) {
-						unsubscribe = sessionWatcher.subscribe(() => broadcastSessions());
-					}
-
-					// Send initial data
-					const sessions = getEnrichedSessions();
-					ws.send(
-						JSON.stringify({
-							type: 'connected',
-							sessions,
-							count: sessions.length,
-							timestamp: Date.now()
-						})
-					);
-
-					ws.on('close', () => {
-						sessionsClients.delete(ws);
-						if (sessionsClients.size === 0 && unsubscribe) {
-							unsubscribe();
-							unsubscribe = null;
-							lastHash = '';
-						}
-					});
+				if (!parsed) {
+					ws.close();
 					return;
 				}
 
-				// Terminal stream: /api/sessions/[target]/stream
-				const termMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/stream$/);
-				if (termMatch) {
-					const target = decodeURIComponent(termMatch[1]);
+				const client = createClient(ws);
 
-					if (!terminalClients.has(target)) {
-						terminalClients.set(target, new Set());
-					}
-					terminalClients.get(target)!.add(ws);
-
-					// Start polling on first client for this target
-					if (terminalClients.get(target)!.size === 1) {
-						startTerminalPolling(target);
+				if (parsed.type === 'sessions') {
+					const accepted = sessionsWsManager.addClient(client);
+					if (!accepted) {
+						ws.close(1013, 'Max clients reached');
+						return;
 					}
 
-					// Send initial output
-					const output = capturePaneOutput(target) ?? '';
-					ws.send(JSON.stringify({ type: 'output', output, timestamp: Date.now() }));
-
-					// Handle resize messages
 					ws.on('message', (data) => {
-						try {
-							const msg = JSON.parse(data.toString());
-							if (msg.type === 'resize' && typeof msg.cols === 'number' && typeof msg.rows === 'number') {
-								resizePane(target, msg.cols, msg.rows);
-							}
-						} catch {
-							// Ignore malformed messages
-						}
+						const response = handleWsMessage(data.toString());
+						if (response === 'pong') ws.send('pong');
+					});
+
+					ws.on('close', () => sessionsWsManager.removeClient(client));
+				} else if (parsed.type === 'terminal') {
+					const { target } = parsed;
+					const accepted = terminalWsManager.addClient(client, target);
+					if (!accepted) {
+						ws.close(1013, 'Max clients reached');
+						return;
+					}
+
+					wsTargets.set(ws, target);
+
+					ws.on('message', (data) => {
+						const response = handleWsMessage(data.toString(), (cols, rows) =>
+							resizePane(target, cols, rows)
+						);
+						if (response === 'pong') ws.send('pong');
 					});
 
 					ws.on('close', () => {
-						const clients = terminalClients.get(target);
-						if (clients) {
-							clients.delete(ws);
-							if (clients.size === 0) {
-								stopTerminalPolling(target);
-								terminalClients.delete(target);
-							}
-						}
+						const t = wsTargets.get(ws);
+						terminalWsManager.removeClient(client, t);
 					});
-					return;
 				}
-
-				// Unknown path
-				ws.close();
 			});
 
 			// Handle upgrade requests (skip Vite HMR)
