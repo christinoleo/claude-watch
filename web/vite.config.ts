@@ -123,7 +123,17 @@ function devWebSocket() {
 			// Handle upgrade requests (skip Vite HMR)
 			server.httpServer.on('upgrade', (req, socket, head) => {
 				if (req.headers['sec-websocket-protocol'] === 'vite-hmr') return;
-				wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
+				wss.handleUpgrade(req, socket, head, (ws) => {
+					// Attach error handler IMMEDIATELY before emitting 'connection'
+					// This catches errors from malformed frames (e.g., mobile browser invalid close codes)
+					ws.on('error', (error) => {
+						console.log('[ws] WebSocket error (early):', {
+							code: (error as { code?: string }).code,
+							message: error.message
+						});
+					});
+					wss.emit('connection', ws, req);
+				});
 			});
 
 			server.httpServer.on('close', () => wss?.close());

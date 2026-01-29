@@ -106,5 +106,27 @@ export const websocket = {
 		}
 
 		wsDataMap.delete(ws);
+	},
+
+	error(ws: WebSocket, error: Error) {
+		// Handle malformed WebSocket frames (e.g., invalid close codes from mobile browsers)
+		// This prevents the server from crashing when clients disconnect abruptly
+		const data = wsDataMap.get(ws);
+		console.log(`[ws:${data?.type ?? 'unknown'}] WebSocket error`, {
+			code: (error as { code?: string }).code,
+			message: error.message
+		});
+
+		// Clean up the connection
+		if (data) {
+			if (data.type === 'sessions') {
+				sessionsWsManager.removeClient(data.client);
+			} else if (data.type === 'terminal') {
+				terminalWsManager.removeClient(data.client, data.target);
+			} else if (data.type === 'beads') {
+				beadsWsManager.removeClient(data.client, data.project);
+			}
+			wsDataMap.delete(ws);
+		}
 	}
 };
