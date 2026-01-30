@@ -364,8 +364,3 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 5. Push to the branch
 6. Open a Pull Request
 
----
-
-<p align="center">
-  Made with ❤️ for the Claude Code community
-</p>
