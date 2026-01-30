@@ -1,4 +1,4 @@
-import type { Handle } from '@sveltejs/kit';
+import { redirect, type Handle } from '@sveltejs/kit';
 import {
 	SessionsWsManager,
 	TerminalWsManager,
@@ -8,6 +8,7 @@ import {
 	resizePane,
 	type WsClient
 } from '$shared/server/ws-handlers.js';
+import { isAuthEnabled, validateAuthToken, AUTH_COOKIE } from '$lib/server/auth.js';
 
 // Global manager instances with config
 const sessionsWsManager = new SessionsWsManager({ debug: true });
@@ -22,6 +23,29 @@ const wsDataMap = new WeakMap<
 
 // Handle function for SvelteKit
 export const handle: Handle = async ({ event, resolve }) => {
+	const pathname = event.url.pathname;
+
+	// Skip auth for login routes
+	const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/api/auth');
+
+	// Check authentication if enabled
+	if (isAuthEnabled() && !isAuthRoute) {
+		const token = event.cookies.get(AUTH_COOKIE.name);
+		const isAuthenticated = validateAuthToken(token);
+
+		if (!isAuthenticated) {
+			// For API routes, return 401
+			if (pathname.startsWith('/api/')) {
+				return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+					status: 401,
+					headers: { 'Content-Type': 'application/json' }
+				});
+			}
+			// For pages, redirect to login
+			throw redirect(302, '/login');
+		}
+	}
+
 	// Check for WebSocket upgrade
 	const connectionHeader = event.request.headers.get('connection');
 	const upgradeHeader = event.request.headers.get('upgrade');
