@@ -83,10 +83,11 @@
 
 ## Installation
 
-### From npm (recommended)
+### From npm/bun (recommended)
 
 ```bash
-npm install -g claude-mux
+bun install -g claude-mux
+# or: npm install -g claude-mux
 ```
 
 ### From source
@@ -96,7 +97,7 @@ git clone https://github.com/christinoleo/claude-mux.git
 cd claude-mux
 bun install
 bun run build
-npm link  # Makes 'claude-mux' available globally
+bun link  # Makes 'claude-mux' available globally
 ```
 
 ---
