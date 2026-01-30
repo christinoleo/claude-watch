@@ -5,9 +5,11 @@
 	import { onDestroy } from 'svelte';
 	import { terminalStore } from '$lib/stores/terminal.svelte';
 	import { sessionStore, stateColor } from '$lib/stores/sessions.svelte';
+	import { preferences } from '$lib/stores/preferences.svelte';
 	import { inputInjection } from '$lib/stores/input-injection.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as AlertDialog from '$lib/components/ui/alert-dialog';
+	import TerminalRenderer from '$lib/components/TerminalRenderer.svelte';
 
 	const target = $derived($page.params.target ? decodeURIComponent($page.params.target) : null);
 
@@ -18,7 +20,7 @@
 
 	let textInput = $state('');
 	let showConfirmKill = $state(false);
-	let outputElement: HTMLPreElement | null = $state(null);
+	let outputElement: HTMLDivElement | null = $state(null);
 	let textareaElement: HTMLTextAreaElement | null = $state(null);
 	let userScrolledUp = $state(false);
 	let showCopied = $state(false);
@@ -206,9 +208,14 @@
 				<iconify-icon icon="mdi:fit-to-screen"></iconify-icon>
 				<span>Fit</span>
 			</Button>
-			<Button variant="secondary" size="toolbar" onclick={() => sendKeys('Escape')} title="Send Escape key">
-				<iconify-icon icon="mdi:stop"></iconify-icon>
-				<span>Esc</span>
+			<Button
+				variant={preferences.terminalTheming ? "secondary" : "ghost"}
+				size="toolbar"
+				onclick={() => preferences.toggle('terminalTheming')}
+				title="Toggle syntax highlighting"
+			>
+				<iconify-icon icon={preferences.terminalTheming ? "mdi:palette" : "mdi:palette-outline"}></iconify-icon>
+				<span>Theme</span>
 			</Button>
 			<Button variant="ghost-destructive" size="toolbar" onclick={() => (showConfirmKill = true)} title="Kill Session">
 				<iconify-icon icon="mdi:power"></iconify-icon>
@@ -217,7 +224,13 @@
 		</div>
 	</header>
 
-	<pre class="output" bind:this={outputElement} onscroll={handleScroll}>{terminalStore.output}</pre>
+	<div class="output" bind:this={outputElement} onscroll={handleScroll}>
+		{#if preferences.terminalTheming}
+			<TerminalRenderer blocks={terminalStore.parsedBlocks} />
+		{:else}
+			<pre class="raw-output">{terminalStore.output}</pre>
+		{/if}
+	</div>
 
 	<div class="toolbar">
 		<Button variant="secondary" size="toolbar" class="flex-1" onclick={() => sendKeys('Up')}>
@@ -249,6 +262,10 @@
 		}}>
 			<iconify-icon icon="mdi:broom"></iconify-icon>
 			<span>/clear</span>
+		</Button>
+		<Button variant="secondary" size="toolbar" class="flex-1" onclick={() => sendKeys('Escape')}>
+			<iconify-icon icon="mdi:stop"></iconify-icon>
+			<span>Esc</span>
 		</Button>
 		<Button variant="ghost-destructive" size="toolbar" class="flex-1" onclick={() => sendKeys('C-c')}>
 			<iconify-icon icon="mdi:cancel"></iconify-icon>
@@ -367,6 +384,17 @@
 		word-break: break-word;
 		background: #000;
 		color: #fff;
+	}
+
+	.raw-output {
+		margin: 0;
+		font-family: inherit;
+		font-size: inherit;
+		line-height: inherit;
+		white-space: pre-wrap;
+		word-break: break-word;
+		background: transparent;
+		color: inherit;
 	}
 
 	.toolbar {

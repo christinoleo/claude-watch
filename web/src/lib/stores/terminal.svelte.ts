@@ -1,8 +1,16 @@
 import { browser } from '$app/environment';
 import { ReliableWebSocket } from './websocket-base.svelte';
+import { parseTerminalOutput, getBlockStats } from '$lib/utils/terminal-parser';
+import type { ParsedBlock } from '$lib/types/terminal';
 
 class TerminalStore extends ReliableWebSocket {
 	output = $state('');
+
+	// Derived parsed blocks - automatically recomputed when output changes
+	parsedBlocks: ParsedBlock[] = $derived(parseTerminalOutput(this.output));
+
+	// Derived stats for UI indicators
+	stats = $derived(getBlockStats(this.parsedBlocks));
 
 	private target: string | null = null;
 	private resizeTimer: ReturnType<typeof setTimeout> | null = null;
