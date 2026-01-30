@@ -9,7 +9,7 @@
   <a href="https://www.npmjs.com/package/claude-mux"><img src="https://img.shields.io/npm/v/claude-mux?style=flat-square&color=blue" alt="npm version"></a>
   <a href="https://www.npmjs.com/package/claude-mux"><img src="https://img.shields.io/npm/dm/claude-mux?style=flat-square&color=green" alt="npm downloads"></a>
   <a href="https://github.com/christinoleo/claude-mux/blob/main/LICENSE"><img src="https://img.shields.io/github/license/christinoleo/claude-mux?style=flat-square" alt="license"></a>
-  <img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen?style=flat-square" alt="node version">
+  <img src="https://img.shields.io/badge/bun-%3E%3D1.0-f472b6?style=flat-square" alt="bun version">
   <img src="https://img.shields.io/badge/platform-linux%20%7C%20macos-lightgrey?style=flat-square" alt="platform">
 </p>
 
@@ -342,9 +342,11 @@ claude-mux/
 
 ## Requirements
 
-- **Node.js** >= 18 (or Bun)
+- **Bun** >= 1.0 (required for the web server)
 - **tmux** (required for terminal capture)
 - **Claude Code** with hooks support
+
+> **Note:** The `claude-mux serve` command requires [Bun](https://bun.sh) runtime.
 
 ---
 
