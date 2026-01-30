@@ -181,6 +181,7 @@ export function resizePane(target: string, cols: number, rows: number): void {
 export class SessionsWsManager {
 	private clients = new Set<WsClient>();
 	private unsubscribe: (() => void) | null = null;
+	private interruptCheckTimer: ReturnType<typeof setInterval> | null = null;
 	private lastHash = '';
 	private config: Required<WsConfig>;
 	private droppedClients = 0;
@@ -228,6 +229,12 @@ export class SessionsWsManager {
 		if (this.clients.size === 1 && !this.unsubscribe) {
 			console.log('[ws:sessions] First client, subscribing to watcher');
 			this.unsubscribe = sessionWatcher.subscribe(() => this.broadcastIfChanged());
+			// Start interrupt check timer - runs independently of file changes
+			// to catch interruptions triggered by web UI (Escape key)
+			this.interruptCheckTimer = setInterval(() => {
+				syncSessionStates();
+				this.broadcastIfChanged();
+			}, 500);
 		} else {
 			console.log('[ws:sessions] addClient: clients=', this.clients.size, 'hasUnsubscribe=', !!this.unsubscribe);
 		}
@@ -253,6 +260,11 @@ export class SessionsWsManager {
 			this.unsubscribe();
 			this.unsubscribe = null;
 			this.lastHash = '';
+			// Stop interrupt check timer
+			if (this.interruptCheckTimer) {
+				clearInterval(this.interruptCheckTimer);
+				this.interruptCheckTimer = null;
+			}
 		}
 	}
 
