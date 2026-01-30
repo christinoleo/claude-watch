@@ -4,6 +4,7 @@ export {
   upsertSession,
   updateSession,
   deleteSession,
+  removeScreenshot,
   getAllSessions,
   getSessionPids,
   deleteSessionsByPids,
@@ -14,4 +15,5 @@ export {
   type SessionState,
   type SessionInput,
   type SessionUpdate,
+  type Screenshot,
 } from "./sessions-json.js";

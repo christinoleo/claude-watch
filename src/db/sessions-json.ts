@@ -30,6 +30,11 @@ export function setSessionsDir(dir: string | null): void {
 
 export type SessionState = "busy" | "idle" | "waiting" | "permission";
 
+export interface Screenshot {
+  path: string;
+  timestamp: number;
+}
+
 export interface Session {
   v: number;
   id: string;
@@ -42,6 +47,7 @@ export interface Session {
   current_action: string | null;
   prompt_text: string | null;
   last_update: number;
+  screenshots?: Screenshot[];
 }
 
 export interface SessionInput {
@@ -159,6 +165,25 @@ export function deleteSession(id: string): void {
   } catch {
     // Ignore errors (file may already be deleted)
   }
+}
+
+/**
+ * Remove a screenshot from a session.
+ */
+export function removeScreenshot(id: string, screenshotPath: string): boolean {
+  const session = getSession(id);
+  if (!session || !session.screenshots) return false;
+
+  const initialLength = session.screenshots.length;
+  session.screenshots = session.screenshots.filter((s) => s.path !== screenshotPath);
+
+  if (session.screenshots.length === initialLength) {
+    return false; // Screenshot not found
+  }
+
+  session.last_update = Date.now();
+  writeSessionFile(session);
+  return true;
 }
 
 /**

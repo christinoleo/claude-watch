@@ -1,6 +1,11 @@
 import { browser } from '$app/environment';
 import { ReliableWebSocket } from './websocket-base.svelte';
 
+export interface Screenshot {
+	path: string;
+	timestamp: number;
+}
+
 export interface Session {
 	v: number;
 	id: string;
@@ -14,6 +19,7 @@ export interface Session {
 	prompt_text: string | null;
 	last_update: number;
 	pane_title?: string | null;
+	screenshots?: Screenshot[];
 }
 
 class SessionStore extends ReliableWebSocket {

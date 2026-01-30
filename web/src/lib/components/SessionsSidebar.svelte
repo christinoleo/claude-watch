@@ -6,6 +6,7 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import BeadsPanel from './BeadsPanel.svelte';
+	import ScreenshotsPanel from './ScreenshotsPanel.svelte';
 	import type { BeadsIssue } from '$lib/stores/beads.svelte';
 
 	interface Props {
@@ -133,6 +134,14 @@
 			<BeadsPanel
 				project={currentSession.git_root}
 				onSelect={handleIssueSelect}
+			/>
+		{/if}
+
+		<!-- Screenshots Panel -->
+		{#if currentSession?.screenshots && currentSession.screenshots.length > 0}
+			<ScreenshotsPanel
+				sessionId={currentSession.id}
+				screenshots={currentSession.screenshots}
 			/>
 		{/if}
 	</div>

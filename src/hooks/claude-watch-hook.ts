@@ -40,6 +40,11 @@ function debugLog(message: string): void {
   appendFileSync(DEBUG_LOG_PATH, `${timestamp} ${message}\n`);
 }
 
+interface Screenshot {
+  path: string;
+  timestamp: number;
+}
+
 interface Session {
   v: number;
   id: string;
@@ -52,6 +57,7 @@ interface Session {
   current_action: string | null;
   prompt_text: string | null;
   last_update: number;
+  screenshots?: Screenshot[];
 }
 
 interface HookInput {
@@ -61,6 +67,7 @@ interface HookInput {
   tool_input?: {
     command?: string;
     file_path?: string;
+    filePath?: string;
     description?: string;
   };
 }
@@ -380,6 +387,16 @@ function handlePreToolUse(input: HookInput): void {
     ? formatToolAction(input.tool_name, input.tool_input)
     : "Working...";
   session.last_update = Date.now();
+
+  // Capture screenshots from Chrome MCP tool
+  if (input.tool_name?.includes("take_screenshot") && input.tool_input?.filePath) {
+    session.screenshots = session.screenshots || [];
+    session.screenshots.push({
+      path: input.tool_input.filePath,
+      timestamp: Date.now(),
+    });
+  }
+
   writeSession(session);
 }
 
