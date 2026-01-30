@@ -580,9 +580,14 @@
 	}
 
 	.project-sessions .session.active {
-		background: hsl(var(--primary) / 0.15);
-		border-left: 2px solid hsl(var(--primary));
-		padding-left: 8px;
+		background: hsl(var(--primary) / 0.25);
+		border-left: 4px solid hsl(var(--primary));
+		padding-left: 6px;
+		box-shadow: inset 0 0 0 1px hsl(var(--primary) / 0.3);
+	}
+
+	.project-sessions .session.active .target {
+		color: hsl(var(--primary));
 	}
 
 	.session .state {

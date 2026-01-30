@@ -247,7 +247,8 @@
 	}
 
 	.session-item.active {
-		background: hsl(var(--accent));
+		background: hsl(var(--primary) / 0.25);
+		box-shadow: inset 0 0 0 1px hsl(var(--primary) / 0.3);
 	}
 
 	.session-item.active::before {
@@ -256,9 +257,13 @@
 		left: 0;
 		top: 4px;
 		bottom: 4px;
-		width: 3px;
+		width: 4px;
 		background: hsl(var(--primary));
 		border-radius: 0 2px 2px 0;
+	}
+
+	.session-item.active .session-name {
+		color: hsl(var(--primary));
 	}
 
 	.icon-slot {

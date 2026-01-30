@@ -1,24 +1,85 @@
-# claude-watch
+<p align="center">
+  <h1 align="center">claude-watch</h1>
+  <p align="center">
+    <strong>A real-time web dashboard for monitoring and controlling multiple Claude Code sessions</strong>
+  </p>
+</p>
 
-A terminal UI dashboard for monitoring multiple Claude Code sessions running in tmux. See at a glance which sessions need attention, which are idle, and which are actively working—then jump to any session with a single keystroke.
+<p align="center">
+  <a href="https://www.npmjs.com/package/@aknakos/claude-watch"><img src="https://img.shields.io/npm/v/@aknakos/claude-watch?style=flat-square&color=blue" alt="npm version"></a>
+  <a href="https://www.npmjs.com/package/@aknakos/claude-watch"><img src="https://img.shields.io/npm/dm/@aknakos/claude-watch?style=flat-square&color=green" alt="npm downloads"></a>
+  <a href="https://github.com/aknakos/claude-watch/blob/main/LICENSE"><img src="https://img.shields.io/github/license/aknakos/claude-watch?style=flat-square" alt="license"></a>
+  <img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen?style=flat-square" alt="node version">
+  <img src="https://img.shields.io/badge/platform-linux%20%7C%20macos-lightgrey?style=flat-square" alt="platform">
+</p>
 
-**Requires tmux.** claude-watch is designed to run inside tmux and leverages tmux for session management, navigation, and state detection.
+<p align="center">
+  <a href="#features">Features</a> •
+  <a href="#installation">Installation</a> •
+  <a href="#quick-start">Quick Start</a> •
+  <a href="#web-interface">Web Interface</a> •
+  <a href="#how-it-works">How It Works</a>
+</p>
 
-<!--[claude-watch dashboard](https://placeholder-for-screenshot.png)-->
-https://github.com/user-attachments/assets/74d77eee-191e-4224-aa87-9985efd1ace7
+---
+
+## Screenshots
+
+<p align="center">
+  <img src="docs/images/desktop-dashboard.png" alt="Desktop Dashboard" width="100%">
+  <br>
+  <em>Dashboard view — Monitor all your Claude Code sessions at a glance</em>
+</p>
+
+<p align="center">
+  <img src="docs/images/desktop-session.png" alt="Session View with Syntax Highlighting" width="100%">
+  <br>
+  <em>Session view — Real-time terminal output with syntax highlighting</em>
+</p>
+
+<details>
+<summary><strong>📱 Mobile Screenshots</strong></summary>
+<br>
+<p align="center">
+  <img src="docs/images/mobile-dashboard.png" alt="Mobile Dashboard" width="300">
+  &nbsp;&nbsp;&nbsp;
+  <img src="docs/images/mobile-session.png" alt="Mobile Session" width="300">
+</p>
+<p align="center"><em>Fully responsive — Control your Claude sessions from your phone</em></p>
+</details>
+
+---
 
 ## Features
 
-- **Real-time monitoring** of all Claude Code sessions across tmux
-- **Color-coded status indicators**:
-  - 🔴 Red — Waiting for permission or user input
-  - 🟡 Yellow — Idle at prompt
-  - 🟢 Green — Actively working
-- **tmux session list** — Also shows non-Claude tmux sessions for easy navigation
-- **Quick navigation** — Press Enter to jump directly to any session
-- **Fullscreen TUI** — Uses alternate screen buffer, restores terminal on exit
-- **Automatic session management** — Automatically creates and switches to a dedicated `watch` session
-- **Automatic cleanup** — Removes stale sessions when Claude processes exit
+### 🌐 Web Dashboard
+- **Real-time monitoring** of all Claude Code sessions via WebSocket
+- **Project-based organization** — Sessions grouped by working directory
+- **Live status indicators** — See which sessions are busy, idle, or waiting for input
+- **One-click navigation** — Jump to any session instantly
+
+### 🎨 Syntax Highlighting
+- **Color-coded terminal output** — User prompts, Claude responses, tool calls, and results
+- **Tool-specific colors** — Different colors for Read, Write, Edit, Bash, Task, and more
+- **Diff highlighting** — Green for additions, red for removals in file edits
+- **Toggleable theming** — Switch between styled and raw output
+
+### 📱 Mobile-First Design
+- **Fully responsive** — Works on desktop, tablet, and phone
+- **Touch-friendly controls** — Large buttons for common actions
+- **Quick action toolbar** — Send keys (Up, Down, Tab, Esc, Ctrl-C) with one tap
+
+### 🎮 Session Control
+- **Send text input** — Type messages directly to Claude
+- **Keyboard shortcuts** — Send special keys and key combinations
+- **Terminal resize** — Fit tmux pane to browser viewport
+- **Kill sessions** — Terminate Claude processes when needed
+
+### 🔒 Optional Features
+- **Authentication** — Password-protect your dashboard
+- **LAN access** — Monitor sessions from any device on your network
+
+---
 
 ## Installation
 
@@ -33,64 +94,158 @@ npm install -g @aknakos/claude-watch
 ```bash
 git clone https://github.com/aknakos/claude-watch.git
 cd claude-watch
-npm install
-npm run build
+bun install
+bun run build
 npm link  # Makes 'claude-watch' available globally
 ```
 
-## Setup
+---
 
-Run the interactive setup wizard:
+## Quick Start
+
+### 1. Run setup
 
 ```bash
 claude-watch setup
 ```
 
 This will:
+- Create the data directory at `~/.claude-watch/`
+- Install Claude Code hooks in `~/.claude/settings.json`
 
-1. **Create the data directory** at `~/.claude-watch/`
-2. **Initialize the SQLite database** for session state
-3. **Install Claude Code hooks** in `~/.claude/settings.json`
+### 2. Start the web server
 
-The tmux keybinding (`prefix + W`) is added automatically when claude-watch starts.
+```bash
+claude-watch serve --port 3456 --host 0.0.0.0
+```
 
-## Usage
+### 3. Open the dashboard
 
-### Available commands
+Navigate to `http://localhost:3456` (or your machine's IP for LAN access).
+
+### 4. Start using Claude Code
+
+Any Claude Code session started after setup will appear in the dashboard automatically.
+
+---
+
+## Web Interface
+
+### Dashboard
+
+The main dashboard shows all active Claude Code sessions organized by project:
+
+| Element | Description |
+|---------|-------------|
+| **Project cards** | Sessions grouped by working directory |
+| **Status indicators** | 🟢 Busy, 🟡 Idle, 🔴 Waiting for input |
+| **Current action** | Shows what Claude is currently doing |
+| **Quick actions** | New session, kill session, refresh |
+
+### Session View
+
+Click any session to open the real-time terminal view:
+
+| Feature | Description |
+|---------|-------------|
+| **Live output** | Streams terminal content via WebSocket |
+| **Syntax highlighting** | Color-coded messages and tool calls |
+| **Text input** | Send messages to Claude |
+| **Action buttons** | Up, Down, Space, Tab, Esc, Ctrl-C, etc. |
+| **Tmux command** | Copy `tmux attach` command for direct access |
+
+### Keyboard Shortcuts (in session view)
+
+| Key | Action |
+|-----|--------|
+| `Enter` | Send message |
+| `Shift+Enter` | New line in message |
+
+---
+
+## CLI Commands
 
 | Command | Description |
 |---------|-------------|
-| `claude-watch` | Start TUI dashboard (default, requires tmux) |
-| `claude-watch serve` | Start HTTP server only (no tmux required) |
+| `claude-watch serve` | Start the web server |
 | `claude-watch setup` | Run interactive setup wizard |
 | `claude-watch uninstall` | Remove hooks and configuration |
+| `claude-watch` | Start TUI dashboard (legacy, requires tmux) |
 
-### Options
-
-```bash
-# TUI with HTTP server
-claude-watch --serve --port 8080
-
-# HTTP server only
-claude-watch serve --port 8080 --host 0.0.0.0
-```
-
-### Starting the dashboard
-
-From any tmux session, simply run:
+### Server Options
 
 ```bash
-claude-watch
+claude-watch serve [options]
+
+Options:
+  -p, --port <number>     Port to listen on (default: 45677)
+  -h, --host <string>     Host to bind to (default: "localhost")
+  -a, --auth <password>   Enable authentication with password
 ```
 
-This will automatically:
-1. Create a `watch` session if it doesn't exist
-2. Switch you to the `watch` session
-3. Start the dashboard
+### Examples
 
-If you run claude-watch outside of tmux, it will print an error and exit.
+```bash
+# Start on custom port
+claude-watch serve --port 8080
 
-### Keyboard shortcuts
+# Allow LAN access
+claude-watch serve --host 0.0.0.0
+
+# With authentication
+claude-watch serve --host 0.0.0.0 --auth mysecretpassword
+```
+
+---
+
+## How It Works
+
+### Architecture
+
+```
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│  Claude Code    │────▶│  Hook Scripts    │────▶│  JSON Files     │
+│  (running)      │     │  (on events)     │     │  (~/.claude-watch/sessions/)
+└─────────────────┘     └──────────────────┘     └────────┬────────┘
+                                                          │
+┌─────────────────┐     ┌──────────────────┐              │
+│  tmux panes     │────▶│  Pane Capture    │──────────────┤
+│  (terminal)     │     │  (WebSocket)     │              │
+└─────────────────┘     └──────────────────┘              │
+                                                          ▼
+                        ┌──────────────────┐     ┌─────────────────┐
+                        │  Web Browser     │◀───▶│  SvelteKit      │
+                        │  (dashboard)     │     │  (WebSocket)    │
+                        └──────────────────┘     └─────────────────┘
+```
+
+### Claude Code Hooks
+
+claude-watch uses [Claude Code hooks](https://docs.anthropic.com/en/docs/claude-code/hooks) to track session state:
+
+| Hook | Purpose |
+|------|---------|
+| `SessionStart` | Register new session with PID and working directory |
+| `UserPromptSubmit` | Mark session as busy |
+| `PreToolUse` | Update status with current tool name |
+| `Stop` | Mark session as idle when turn ends |
+| `Notification` | Handle permission requests and questions |
+
+### Real-time Updates
+
+- **WebSocket connections** for instant updates (no polling)
+- **File watcher** monitors session state changes
+- **Pane capture** streams terminal output every 200ms
+
+---
+
+## Terminal UI (Legacy)
+
+claude-watch also includes a terminal-based dashboard for use inside tmux:
+
+```bash
+claude-watch  # Requires tmux
+```
 
 | Key | Action |
 |-----|--------|
@@ -99,202 +254,69 @@ If you run claude-watch outside of tmux, it will print an error and exit.
 | `Enter` | Jump to selected session |
 | `q` | Quit dashboard |
 
-### Quick access
+Press `prefix + W` from any tmux session to jump to the dashboard.
 
-From any tmux session, press `prefix + W` to jump to the dashboard.
-
-## How It Works
-
-### Architecture
-
-```
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│  Claude Code    │────▶│  Hook Scripts    │────▶│  SQLite DB      │
-│  (running)      │     │  (on events)     │     │  (state.db)     │
-└─────────────────┘     └──────────────────┘     └────────┬────────┘
-                                                          │
-┌─────────────────┐     ┌──────────────────┐              │
-│  tmux panes     │────▶│  Pane Polling    │──────────────┤
-│  (capture)      │     │  (every 2s)      │              │
-└─────────────────┘     └──────────────────┘              │
-                                                          ▼
-                                               ┌─────────────────┐
-                                               │  claude-watch   │
-                                               │  TUI (polling)  │
-                                               └─────────────────┘
-```
-
-### Claude Code Hooks
-
-claude-watch uses [Claude Code hooks](https://docs.anthropic.com/en/docs/claude-code/hooks) to track session state changes:
-
-| Hook | Purpose |
-|------|---------|
-| `SessionStart` | Register new session with PID and working directory |
-| `UserPromptSubmit` | Mark session as busy ("Thinking...") |
-| `PreToolUse` | Update status with current tool name |
-| `PostToolUse` | Clear tool-specific status |
-| `Stop` | Mark session as idle when turn ends |
-| `Notification` | Handle idle prompts, permission requests, elicitations |
-| `SessionEnd` | Remove session from tracking |
-
-### Tmux Pane Polling
-
-> **NOTE:** This heuristic exists because Claude Code does not currently provide a hook for when the user interrupts Claude with the Escape key. If a `UserInterrupt` hook is added to Claude Code in the future, this polling mechanism should be revisited.
-
-Hooks don't fire when the user presses Escape to interrupt Claude mid-response. To handle this, claude-watch polls tmux panes every 2 seconds:
-
-- If interrupt hint is visible (`"Esc to interrupt"` or `"ctrl+c to interrupt"`) → Claude is working (busy)
-- If no interrupt hint is visible → Claude is idle
-
-This bidirectional sync ensures the dashboard accurately reflects the true state even when hooks don't fire.
-
-### Data Storage
-
-Session state is stored in SQLite at `~/.claude-watch/state.db` using WAL mode for concurrent access between hook scripts and the TUI.
-
-```sql
-CREATE TABLE sessions (
-  id TEXT PRIMARY KEY,           -- Claude session ID
-  pid INTEGER,                   -- Claude process ID
-  cwd TEXT,                      -- Working directory
-  tmux_target TEXT,              -- tmux pane (e.g., "main:1.0")
-  state TEXT,                    -- busy, idle, waiting, permission
-  current_action TEXT,           -- Current tool or action
-  prompt_text TEXT,              -- Question text (for elicitations)
-  last_update INTEGER,           -- Timestamp
-  metadata TEXT                  -- JSON metadata
-);
-```
+---
 
 ## Development
 
 ### Prerequisites
 
-- Node.js >= 18
-- npm
+- Node.js >= 18 (or Bun)
 - tmux (for full functionality)
 
-### Running locally
+### Setup
 
 ```bash
-# Clone the repository
 git clone https://github.com/aknakos/claude-watch.git
 cd claude-watch
-
-# Install dependencies
-npm install
-
-# Build TypeScript
-npm run build
-
-# Run directly
-node dist/cli.js
-
-# Or link for global access
-npm link
-claude-watch
+bun install
 ```
 
-### Development workflow
+### Development Server
 
 ```bash
-# Watch mode (rebuild on changes)
-npm run build -- --watch
-
-# Run tests
-npm test
-
-# Run tests in watch mode
-npm run test:watch
-
-# Check test coverage
-npm run coverage
-
-# Lint code
-npm run lint
-
-# Format code
-npm run format
+bun run dev:serve  # Starts Vite dev server with HMR
 ```
 
-### Project structure
+### Build
+
+```bash
+bun run build      # Build CLI + web app
+bun run build:cli  # Build CLI only
+bun run build:web  # Build web app only
+```
+
+### Testing
+
+```bash
+bun test           # Run tests
+bun run lint       # Lint code
+bun run format     # Format code
+```
+
+### Project Structure
 
 ```
 claude-watch/
-├── src/
-│   ├── cli.ts              # CLI entry point
-│   ├── app.tsx             # Main React/Ink app
-│   ├── commands/           # CLI subcommands
-│   │   ├── serve.ts        # HTTP server command
-│   │   ├── setup.ts        # Setup wizard command
-│   │   ├── uninstall.ts    # Uninstall command
-│   │   └── tui.ts          # TUI command (default)
-│   ├── components/         # UI components
-│   │   ├── Header.tsx
-│   │   ├── SessionEntry.tsx
-│   │   ├── SessionList.tsx
-│   │   └── StatusBar.tsx
-│   ├── db/                 # Database layer
-│   │   ├── schema.ts
-│   │   ├── sessions.ts
-│   │   └── index.ts
+├── src/                    # CLI and hooks
+│   ├── cli.ts              # Entry point
+│   ├── commands/           # CLI commands (serve, setup, tui)
 │   ├── hooks/              # Claude Code hook handler
-│   │   └── claude-watch-hook.ts
-│   ├── setup/              # Setup wizard
-│   │   ├── hooks.ts
-│   │   └── wizard.ts
-│   ├── tmux/               # tmux integration
-│   │   ├── detect.ts
-│   │   ├── navigate.ts
-│   │   └── pane.ts
-│   └── utils/
-│       ├── paths.ts
-│       └── pid.ts
-└── tests/                  # Test files (mirrors src/)
+│   └── server/             # File watcher, WebSocket handlers
+├── web/                    # SvelteKit web app
+│   ├── src/
+│   │   ├── lib/
+│   │   │   ├── components/ # UI components
+│   │   │   ├── stores/     # Svelte stores (sessions, terminal, preferences)
+│   │   │   └── utils/      # Terminal parser, helpers
+│   │   └── routes/         # Pages and API routes
+│   └── svelte.config.js
+└── docs/
+    └── images/             # Screenshots
 ```
 
-## Upgrading
-
-### From npm
-
-```bash
-npm update -g @aknakos/claude-watch
-claude-watch setup  # Reinstall hooks with updated paths
-```
-
-### From source
-
-```bash
-cd claude-watch
-git pull
-npm install
-npm run build
-claude-watch setup  # Reinstall hooks with updated paths
-```
-
-## Uninstall
-
-Remove hooks from Claude Code settings:
-
-```bash
-claude-watch uninstall
-```
-
-This will remove claude-watch hooks from `~/.claude/settings.json`.
-
-To fully uninstall the package:
-
-```bash
-# Remove hooks first
-claude-watch --cleanup
-
-# Uninstall the npm package
-npm uninstall -g @aknakos/claude-watch
-
-# Remove data directory (optional)
-rm -rf ~/.claude-watch
-```
+---
 
 ## Troubleshooting
 
@@ -302,34 +324,34 @@ rm -rf ~/.claude-watch
 
 1. Ensure you ran `claude-watch setup` to install hooks
 2. Restart any running Claude Code sessions (hooks are loaded at startup)
-3. Check that `~/.claude/settings.json` contains the claude-watch hooks
+3. Check that `~/.claude/settings.json` contains claude-watch hooks
+
+### Cannot connect from another device
+
+1. Use `--host 0.0.0.0` to allow external connections
+2. Check your firewall allows the port
+3. Use your machine's LAN IP, not `localhost`
 
 ### Status not updating
 
-1. Check that hooks are installed: `cat ~/.claude/settings.json | grep claude-watch`
-2. Ensure SQLite database exists: `ls ~/.claude-watch/state.db`
-3. Restart Claude Code sessions to pick up new hooks
+1. Check hooks are installed: `grep claude-watch ~/.claude/settings.json`
+2. Restart Claude Code sessions to pick up new hooks
 
-### "No sessions" when Claude is running
-
-The Claude session may have started before hooks were installed. Restart Claude Code to pick up the new hooks.
-
-### tmux binding not working
-
-The `prefix + W` binding is added dynamically when claude-watch starts. If it's not working:
-
-1. Ensure claude-watch has been started at least once in this tmux server
-2. Check binding exists: `tmux list-keys | grep "switch-client -t watch"`
+---
 
 ## Requirements
 
-- **Node.js** >= 18
-- **tmux** (required)
+- **Node.js** >= 18 (or Bun)
+- **tmux** (required for terminal capture)
 - **Claude Code** with hooks support
+
+---
 
 ## License
 
 MIT
+
+---
 
 ## Contributing
 
@@ -337,7 +359,13 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Run tests (`npm test`)
-4. Commit your changes (`git commit -m 'Add amazing feature'`)
-5. Push to the branch (`git push origin feature/amazing-feature`)
+3. Run tests (`bun test`)
+4. Commit your changes
+5. Push to the branch
 6. Open a Pull Request
+
+---
+
+<p align="center">
+  Made with ❤️ for the Claude Code community
+</p>
