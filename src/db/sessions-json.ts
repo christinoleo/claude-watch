@@ -225,20 +225,8 @@ export function getAllSessions(): Session[] {
     return [];
   }
 
-  // Sort by priority: permission > waiting > idle > busy
-  const priority: Record<SessionState, number> = {
-    permission: 1,
-    waiting: 2,
-    idle: 3,
-    busy: 4,
-  };
-
-  sessions.sort((a, b) => {
-    const pa = priority[a.state] ?? 5;
-    const pb = priority[b.state] ?? 5;
-    if (pa !== pb) return pa - pb;
-    return b.last_update - a.last_update;
-  });
+  // Sort by ID for stable ordering (sessions don't jump around)
+  sessions.sort((a, b) => a.id.localeCompare(b.id));
 
   return sessions;
 }
