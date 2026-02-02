@@ -146,7 +146,8 @@ function devWebSocket() {
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit(), devWebSocket()],
 	server: {
-		host: '0.0.0.0'
+		host: '0.0.0.0',
+		allowedHosts: process.env.VITE_ALLOWED_HOSTS?.split(',').map((h) => h.trim()) ?? true
 	},
 	build: {
 		target: 'esnext'
