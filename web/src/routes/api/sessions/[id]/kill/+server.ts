@@ -9,10 +9,10 @@ export const POST: RequestHandler = async ({ params, request }) => {
 	const { pid, tmux_target } = body;
 
 	try {
-		// Kill the Claude process first
+		// Kill the Claude process first (use SIGKILL since SIGTERM may be ignored)
 		if (typeof pid === 'number' && pid > 0 && Number.isInteger(pid)) {
 			try {
-				execFileSync('kill', [String(pid)], { stdio: 'ignore' });
+				execFileSync('kill', ['-9', String(pid)], { stdio: 'ignore' });
 			} catch {
 				// Process may not exist - ignore
 			}
