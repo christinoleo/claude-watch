@@ -2,6 +2,7 @@
 	import { beadsStore, type BeadsFilter, type BeadsIssue } from '$lib/stores/beads.svelte';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
+	import EpicSection from './EpicSection.svelte';
 	import IssueItem from './IssueItem.svelte';
 
 	interface Props {
@@ -31,10 +32,13 @@
 	}
 
 	const filters: { label: string; value: BeadsFilter }[] = [
-		{ label: 'Ready', value: 'ready' },
-		{ label: 'Open', value: 'open' },
+		{ label: 'Active', value: 'active' },
 		{ label: 'All', value: 'all' }
 	];
+
+	const hasEpics = $derived(beadsStore.epicGroups.length > 0);
+	const hasOrphans = $derived(beadsStore.orphanTasks.length > 0);
+	const isEmpty = $derived(!hasEpics && !hasOrphans);
 </script>
 
 <div class="beads-panel">
@@ -68,10 +72,18 @@
 					<div class="loading">Loading issues...</div>
 				{:else if beadsStore.error}
 					<div class="error">{beadsStore.error}</div>
-				{:else if beadsStore.filteredIssues.length === 0}
+				{:else if isEmpty}
 					<div class="empty">No issues</div>
 				{:else}
-					{#each beadsStore.filteredIssues as issue (issue.id)}
+					{#each beadsStore.epicGroups as group (group.epic.id)}
+						<EpicSection {group} onSelect={handleIssueSelect} />
+					{/each}
+
+					{#if hasEpics && hasOrphans}
+						<div class="section-label">Other tasks</div>
+					{/if}
+
+					{#each beadsStore.orphanTasks as issue (issue.id)}
 						<IssueItem {issue} onSelect={handleIssueSelect} />
 					{/each}
 				{/if}
@@ -129,6 +141,15 @@
 		flex: 1;
 		height: 32px;
 		font-size: 12px;
+	}
+
+	.section-label {
+		font-size: 11px;
+		font-weight: 600;
+		color: hsl(var(--muted-foreground));
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		padding: 12px 12px 4px;
 	}
 
 	.loading,

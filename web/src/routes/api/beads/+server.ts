@@ -15,7 +15,7 @@ export const GET: RequestHandler = async ({ url }) => {
 
 	try {
 		const projectPath = decodeURIComponent(project);
-		const issues = getBeadsIssues(projectPath);
+		const issues = await getBeadsIssues(projectPath);
 
 		return json({
 			issues,

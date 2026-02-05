@@ -1,59 +1,20 @@
 <script lang="ts">
-	import type { BeadsIssue } from '$lib/stores/beads.svelte';
+	import type { BeadsIssue, ResolvedDep } from '$lib/stores/beads.svelte';
+	import { statusColor, priorityColor } from '$shared/types/beads.js';
 	import { Button } from '$lib/components/ui/button';
 
 	interface Props {
 		issue: BeadsIssue;
 		onSelect?: (issue: BeadsIssue) => void;
+		nested?: boolean;
 	}
 
-	let { issue, onSelect }: Props = $props();
+	let { issue, onSelect, nested = false }: Props = $props();
 
 	let expanded = $state(false);
 
-	// Get status color
-	function statusColor(status: BeadsIssue['status']): string {
-		switch (status) {
-			case 'in_progress':
-				return '#27ae60'; // green
-			case 'open':
-				return '#f39c12'; // yellow
-			case 'blocked':
-				return '#e74c3c'; // red
-			case 'closed':
-			case 'deferred':
-			default:
-				return '#888888'; // gray
-		}
-	}
-
-	// Get priority color
-	function priorityColor(priority: number): string {
-		switch (priority) {
-			case 0:
-				return '#e74c3c'; // red - critical
-			case 1:
-				return '#e67e22'; // orange - high
-			case 2:
-				return '#f39c12'; // yellow - medium
-			case 3:
-				return '#3498db'; // blue - low
-			case 4:
-			default:
-				return '#888888'; // gray - backlog
-		}
-	}
-
-	// Format status for display
 	function formatStatus(status: BeadsIssue['status']): string {
 		return status.replace('_', ' ');
-	}
-
-	// Format date for display
-	function formatDate(dateStr?: string): string {
-		if (!dateStr) return '—';
-		const date = new Date(dateStr);
-		return date.toLocaleDateString();
 	}
 
 	function toggleExpanded() {
@@ -64,83 +25,120 @@
 		e.stopPropagation();
 		onSelect?.(issue);
 	}
+
+	/** Check if a need is still active (not closed) */
+	function isActiveNeed(dep: ResolvedDep): boolean {
+		return dep.status !== 'closed';
+	}
+
+	/** Get status hint for a need */
+	function needStatusHint(dep: ResolvedDep): string {
+		if (dep.status === 'closed') return '← done';
+		if (dep.status === 'in_progress') return '← in progress';
+		return '← open';
+	}
+
+	const activeNeeds = $derived(issue.needs.filter(isActiveNeed));
+	const hasActiveNeeds = $derived(activeNeeds.length > 0);
+
+	// Dep summary for collapsed row line 2
+	const depSummary = $derived.by(() => {
+		if (hasActiveNeeds) {
+			const first = activeNeeds[0];
+			const truncated =
+				first.title.length > 30 ? first.title.slice(0, 30) + '…' : first.title;
+			return { text: `blocked · needs: ${truncated}`, type: 'blocked' as const };
+		}
+		if (issue.unblocks.length > 0) {
+			return { text: `unblocks ${issue.unblocks.length}`, type: 'muted' as const };
+		}
+		return null;
+	});
 </script>
 
-<div class="issue-wrapper" class:expanded>
+<div class="issue-wrapper" class:expanded class:nested>
 	<button class="issue-item" onclick={toggleExpanded} type="button">
 		<span class="status-dot" style="background: {statusColor(issue.status)}"></span>
-		<span class="issue-title">{issue.title}</span>
-		<span class="priority-badge" style="background: {priorityColor(issue.priority)}">P{issue.priority}</span>
-		<iconify-icon
-			icon={expanded ? 'mdi:chevron-up' : 'mdi:chevron-down'}
-			class="chevron"
-		></iconify-icon>
+		<div class="issue-main">
+			<div class="issue-title-row">
+				<span class="issue-title">{issue.title}</span>
+				<span class="priority-badge" style="background: {priorityColor(issue.priority)}"
+					>P{issue.priority}</span
+				>
+				<iconify-icon
+					icon={expanded ? 'mdi:chevron-up' : 'mdi:chevron-down'}
+					class="chevron"
+				></iconify-icon>
+			</div>
+			{#if depSummary}
+				<div class="dep-summary" class:dep-blocked={depSummary.type === 'blocked'}>
+					{depSummary.text}
+				</div>
+			{/if}
+		</div>
 	</button>
 
 	{#if expanded}
 		<div class="issue-details">
-			<!-- Full title (not truncated) -->
 			<div class="full-title">{issue.title}</div>
 
-			<!-- Description if available -->
 			{#if issue.description}
 				<div class="description">{issue.description}</div>
 			{/if}
 
-			<!-- Mobile: minimal info -->
-			<div class="details-mobile">
-				<div class="detail-row">
-					<span class="detail-label">Status</span>
-					<span class="detail-value status-value" style="color: {statusColor(issue.status)}">{formatStatus(issue.status)}</span>
-				</div>
-				<div class="detail-row">
-					<span class="detail-label">Type</span>
-					<span class="detail-value">{issue.issue_type}</span>
-				</div>
+			<div class="detail-row">
+				<span class="detail-label">Status</span>
+				<span class="detail-value status-value" style="color: {statusColor(issue.status)}"
+					>{formatStatus(issue.status)}</span
+				>
 			</div>
+			<div class="detail-row">
+				<span class="detail-label">Type</span>
+				<span class="detail-value">{issue.issue_type}</span>
+			</div>
+			{#if issue.assignee}
+				<div class="detail-row">
+					<span class="detail-label">Assignee</span>
+					<span class="detail-value">{issue.assignee}</span>
+				</div>
+			{/if}
+			{#if issue.owner}
+				<div class="detail-row">
+					<span class="detail-label">Owner</span>
+					<span class="detail-value">{issue.owner}</span>
+				</div>
+			{/if}
 
-			<!-- Desktop: full details -->
-			<div class="details-desktop">
-				<div class="detail-row">
-					<span class="detail-label">Status</span>
-					<span class="detail-value status-value" style="color: {statusColor(issue.status)}">{formatStatus(issue.status)}</span>
+			{#if issue.needs.length > 0}
+				<div class="dep-section">
+					<div class="dep-section-label">Needs</div>
+					{#each issue.needs as dep (dep.id)}
+						<div class="dep-item">
+							<span class="dep-dot" style="background: {statusColor(dep.status)}"></span>
+							<span class="dep-title">{dep.title}</span>
+							<span class="dep-hint">{needStatusHint(dep)}</span>
+						</div>
+					{/each}
 				</div>
-				<div class="detail-row">
-					<span class="detail-label">Type</span>
-					<span class="detail-value">{issue.issue_type}</span>
+			{/if}
+
+			{#if issue.unblocks.length > 0}
+				<div class="dep-section">
+					<div class="dep-section-label">Unblocks</div>
+					{#each issue.unblocks as dep (dep.id)}
+						<div class="dep-item">
+							<span class="dep-dot" style="background: {statusColor(dep.status)}"></span>
+							<span class="dep-title"
+								>{dep.title}{#if dep.type === 'epic'} (epic){/if}</span
+							>
+						</div>
+					{/each}
 				</div>
-				{#if issue.assignee}
-					<div class="detail-row">
-						<span class="detail-label">Assignee</span>
-						<span class="detail-value">{issue.assignee}</span>
-					</div>
-				{/if}
-				{#if issue.owner}
-					<div class="detail-row">
-						<span class="detail-label">Owner</span>
-						<span class="detail-value">{issue.owner}</span>
-					</div>
-				{/if}
-				{#if issue.dependencies && issue.dependencies.length > 0}
-					<div class="detail-row">
-						<span class="detail-label">Dependencies</span>
-						<span class="detail-value">{issue.dependencies.map(d => d.depends_on_id).join(', ')}</span>
-					</div>
-				{/if}
-				<div class="detail-row">
-					<span class="detail-label">Created</span>
-					<span class="detail-value">{formatDate(issue.created_at)}</span>
-				</div>
-				{#if issue.updated_at}
-					<div class="detail-row">
-						<span class="detail-label">Updated</span>
-						<span class="detail-value">{formatDate(issue.updated_at)}</span>
-					</div>
-				{/if}
-				<div class="detail-row">
-					<span class="detail-label">ID</span>
-					<span class="detail-value id-value">{issue.id}</span>
-				</div>
+			{/if}
+
+			<div class="detail-row">
+				<span class="detail-label">ID</span>
+				<span class="detail-value id-value">{issue.id}</span>
 			</div>
 
 			<Button variant="outline" size="sm" onclick={handleUseId} class="use-id-btn">
@@ -161,9 +159,13 @@
 		background: hsl(var(--accent) / 0.5);
 	}
 
+	.issue-wrapper.nested {
+		padding-left: 4px;
+	}
+
 	.issue-item {
 		display: flex;
-		align-items: center;
+		align-items: flex-start;
 		gap: 8px;
 		padding: 10px 12px;
 		border-radius: 8px;
@@ -190,6 +192,26 @@
 		height: 10px;
 		border-radius: 50%;
 		flex-shrink: 0;
+		margin-top: 4px;
+	}
+
+	.issue-main {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.issue-title-row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.issue-title {
+		font-size: 13px;
+		flex: 1;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.priority-badge {
@@ -201,18 +223,23 @@
 		flex-shrink: 0;
 	}
 
-	.issue-title {
-		font-size: 13px;
-		flex: 1;
+	.chevron {
+		font-size: 16px;
+		color: hsl(var(--muted-foreground));
+		flex-shrink: 0;
+	}
+
+	.dep-summary {
+		font-size: 11px;
+		color: hsl(var(--muted-foreground));
+		margin-top: 2px;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
-	.chevron {
-		font-size: 16px;
-		color: hsl(var(--muted-foreground));
-		flex-shrink: 0;
+	.dep-summary.dep-blocked {
+		color: #e74c3c;
 	}
 
 	.issue-details {
@@ -232,6 +259,10 @@
 		margin-bottom: 12px;
 		line-height: 1.5;
 		white-space: pre-wrap;
+		display: -webkit-box;
+		-webkit-line-clamp: 3;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
 	}
 
 	.detail-row {
@@ -260,28 +291,50 @@
 		font-size: 11px;
 	}
 
+	.dep-section {
+		margin-top: 8px;
+		margin-bottom: 4px;
+	}
+
+	.dep-section-label {
+		font-size: 11px;
+		font-weight: 600;
+		color: hsl(var(--muted-foreground));
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		margin-bottom: 4px;
+	}
+
+	.dep-item {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		padding: 3px 0;
+		font-size: 12px;
+	}
+
+	.dep-dot {
+		width: 7px;
+		height: 7px;
+		border-radius: 50%;
+		flex-shrink: 0;
+	}
+
+	.dep-title {
+		flex: 1;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.dep-hint {
+		font-size: 11px;
+		color: hsl(var(--muted-foreground));
+		flex-shrink: 0;
+	}
+
 	.issue-details :global(.use-id-btn) {
 		width: 100%;
 		margin-top: 8px;
-	}
-
-	/* Mobile: show minimal details */
-	.details-desktop {
-		display: none;
-	}
-
-	.details-mobile {
-		display: block;
-	}
-
-	/* Desktop: show full details */
-	@media (min-width: 768px) {
-		.details-desktop {
-			display: block;
-		}
-
-		.details-mobile {
-			display: none;
-		}
 	}
 </style>

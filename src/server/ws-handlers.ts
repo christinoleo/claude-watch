@@ -8,7 +8,10 @@
  * - Backpressure handling for slow clients
  */
 
-import { execFileSync } from 'child_process';
+import { execFileSync, execFile } from 'child_process';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
 import { getAllSessions, updateSession, type Session } from '../db/index.js';
 import { checkForInterruption, getPaneTitle } from '../tmux/pane.js';
 import { resizeTmuxWindow } from '../tmux/resize.js';
@@ -228,12 +231,12 @@ export class SessionsWsManager {
 
 		if (this.clients.size === 1 && !this.unsubscribe) {
 			console.log('[ws:sessions] First client, subscribing to watcher');
-			this.unsubscribe = sessionWatcher.subscribe(() => this.broadcastIfChanged());
+			this.unsubscribe = sessionWatcher.subscribe(() => this.refreshAndBroadcast());
 			// Start interrupt check timer - runs independently of file changes
 			// to catch interruptions triggered by web UI (Escape key)
 			this.interruptCheckTimer = setInterval(() => {
 				syncSessionStates();
-				this.broadcastIfChanged();
+				this.refreshAndBroadcast();
 			}, 500);
 		} else {
 			console.log('[ws:sessions] addClient: clients=', this.clients.size, 'hasUnsubscribe=', !!this.unsubscribe);
@@ -273,8 +276,8 @@ export class SessionsWsManager {
 		return { type, sessions, count: sessions.length, timestamp: Date.now() };
 	}
 
-	private broadcastIfChanged(): void {
-		console.log('[ws:sessions] broadcastIfChanged called, clients:', this.clients.size);
+	private refreshAndBroadcast(): void {
+		console.log('[ws:sessions] refreshAndBroadcast called, clients:', this.clients.size);
 		const message = this.createMessage('sessions');
 		const hash = JSON.stringify(message.sessions);
 		if (hash === this.lastHash) {
@@ -584,41 +587,214 @@ export function handleWsMessage(
 // Beads Types and Helpers
 // ============================================================================
 
-export interface BeadsIssue {
+export type { ResolvedDep, BeadsIssue, BeadsMessage } from '../types/beads.js';
+import type { ResolvedDep, BeadsIssue, BeadsMessage } from '../types/beads.js';
+
+/** Raw issue from `bd list --json` */
+interface BdListIssue {
 	id: string;
 	title: string;
-	status: 'open' | 'in_progress' | 'blocked' | 'deferred' | 'closed';
+	description?: string;
+	status: string;
 	priority: number;
 	issue_type: string;
 	owner?: string;
 	assignee?: string;
 	created_at?: string;
 	updated_at?: string;
-	dependencies?: { depends_on_id: string; type: string }[];
+	dependencies?: { issue_id: string; depends_on_id: string; type: string }[];
+	dependency_count: number;
+	dependent_count: number;
 }
 
-export interface BeadsMessage {
-	type: 'issues' | 'connected';
-	issues: BeadsIssue[];
-	project: string;
-	timestamp: number;
+/** Resolved issue from `bd show --json` dependents/dependencies arrays */
+interface BdShowResolved {
+	id: string;
+	title: string;
+	status: string;
+	issue_type: string;
+	dependency_type: string;
+}
+
+/** Full issue from `bd show --json` */
+interface BdShowIssue {
+	id: string;
+	title: string;
+	description?: string;
+	status: string;
+	priority: number;
+	issue_type: string;
+	owner?: string;
+	assignee?: string;
+	created_at?: string;
+	updated_at?: string;
+	dependencies?: BdShowResolved[];
+	dependents?: BdShowResolved[];
 }
 
 /**
- * Fetch beads issues using bd CLI
+ * Build epic_children / parent_epic_id from bd list dependency data alone.
  */
-export function getBeadsIssues(projectPath: string): BeadsIssue[] {
+function buildEpicRelationships(listIssues: BdListIssue[]): {
+	epicChildrenMap: Map<string, string[]>;
+	parentEpicMap: Map<string, string>;
+} {
+	const epicChildrenMap = new Map<string, string[]>();
+	const parentEpicMap = new Map<string, string>();
+
+	for (const issue of listIssues) {
+		if (issue.issue_type !== 'epic' || !issue.dependencies) continue;
+		const childIds = issue.dependencies
+			.filter((d) => d.type === 'blocks')
+			.map((d) => d.depends_on_id);
+		epicChildrenMap.set(issue.id, childIds);
+		for (const childId of childIds) {
+			if (!parentEpicMap.has(childId)) {
+				parentEpicMap.set(childId, issue.id);
+			}
+		}
+	}
+
+	return { epicChildrenMap, parentEpicMap };
+}
+
+/**
+ * Convert bd list issues to BeadsIssue[] with optional bd show enrichment.
+ * Builds epic relationships internally — uses showMap data when available (more accurate),
+ * otherwise falls back to bd list dependency data.
+ */
+function mapToBeadsIssues(
+	listIssues: BdListIssue[],
+	showMap: Map<string, BdShowIssue> | null
+): BeadsIssue[] {
+	const epicChildrenMap = new Map<string, string[]>();
+	const parentEpicMap = new Map<string, string>();
+
+	if (showMap && showMap.size > 0) {
+		// Build from resolved show data (more accurate)
+		for (const issue of listIssues) {
+			if (issue.issue_type !== 'epic') continue;
+			const showData = showMap.get(issue.id);
+			if (!showData?.dependencies) continue;
+			const childIds = showData.dependencies
+				.filter((d) => d.dependency_type === 'blocks')
+				.map((d) => d.id);
+			epicChildrenMap.set(issue.id, childIds);
+			for (const childId of childIds) {
+				if (!parentEpicMap.has(childId)) {
+					parentEpicMap.set(childId, issue.id);
+				}
+			}
+		}
+	} else {
+		// Fall back to bd list dependency data
+		const { epicChildrenMap: ecm, parentEpicMap: pem } = buildEpicRelationships(listIssues);
+		for (const [k, v] of ecm) epicChildrenMap.set(k, v);
+		for (const [k, v] of pem) parentEpicMap.set(k, v);
+	}
+
+	return listIssues.map((li): BeadsIssue => {
+		const showData = showMap?.get(li.id);
+		const isEpic = li.issue_type === 'epic';
+
+		let needs: ResolvedDep[] = [];
+		let unblocks: ResolvedDep[] = [];
+
+		if (showData && !isEpic) {
+			if (showData.dependencies) {
+				needs = showData.dependencies
+					.filter((d) => d.issue_type !== 'epic')
+					.map((d) => ({
+						id: d.id,
+						title: d.title,
+						status: d.status as BeadsIssue['status'],
+						type: d.issue_type
+					}));
+			}
+			if (showData.dependents) {
+				unblocks = showData.dependents.map((d) => ({
+					id: d.id,
+					title: d.title,
+					status: d.status as BeadsIssue['status'],
+					type: d.issue_type
+				}));
+			}
+		}
+
+		return {
+			id: li.id,
+			title: li.title,
+			description: li.description,
+			status: li.status as BeadsIssue['status'],
+			priority: li.priority,
+			issue_type: li.issue_type,
+			owner: li.owner,
+			assignee: li.assignee,
+			created_at: li.created_at,
+			updated_at: li.updated_at,
+			needs,
+			unblocks,
+			...(isEpic ? { epic_children: epicChildrenMap.get(li.id) ?? [] } : {}),
+			...(parentEpicMap.has(li.id) ? { parent_epic_id: parentEpicMap.get(li.id) } : {})
+		};
+	});
+}
+
+/**
+ * Fast sync fetch: bd list only. Returns issues with epic grouping but no resolved dep titles.
+ */
+export function getBeadsIssuesBasic(projectPath: string): BeadsIssue[] {
+	let listIssues: BdListIssue[];
 	try {
-		const result = execFileSync('bd', ['list', '--json'], {
+		const result = execFileSync('bd', ['list', '--json', '--limit', '0', '--no-daemon'], {
 			encoding: 'utf-8',
 			cwd: projectPath,
 			stdio: ['pipe', 'pipe', 'pipe'],
 			timeout: 5000
 		});
-		return JSON.parse(result) as BeadsIssue[];
+		listIssues = JSON.parse(result) as BdListIssue[];
 	} catch {
 		return [];
 	}
+	if (listIssues.length === 0) return [];
+	return mapToBeadsIssues(listIssues, null);
+}
+
+/**
+ * Full async fetch: bd list + bd show. Returns issues with resolved dependency titles.
+ * Non-blocking — does not stall the event loop.
+ */
+export async function getBeadsIssues(projectPath: string): Promise<BeadsIssue[]> {
+	// Step 1: async bd list
+	let listIssues: BdListIssue[];
+	try {
+		const { stdout } = await execFileAsync('bd', ['list', '--json', '--limit', '0', '--no-daemon'], {
+			encoding: 'utf-8',
+			cwd: projectPath,
+			timeout: 5000
+		});
+		listIssues = JSON.parse(stdout) as BdListIssue[];
+	} catch {
+		return [];
+	}
+	if (listIssues.length === 0) return [];
+
+	// Step 2: async bd show for enrichment
+	let showMap: Map<string, BdShowIssue> | null = null;
+	try {
+		const ids = listIssues.map((i) => i.id);
+		const { stdout } = await execFileAsync('bd', ['show', ...ids, '--json', '--no-daemon'], {
+			encoding: 'utf-8',
+			cwd: projectPath,
+			timeout: 10000
+		});
+		const showIssues = JSON.parse(stdout) as BdShowIssue[];
+		showMap = new Map(showIssues.map((i) => [i.id, i]));
+	} catch {
+		// Fallback: no enrichment
+	}
+
+	return mapToBeadsIssues(listIssues, showMap);
 }
 
 // ============================================================================
@@ -635,8 +811,10 @@ interface BeadsWatcherCallback {
 class BeadsProjectWatcher {
 	private subscribers = new Map<string, Set<BeadsWatcherCallback>>();
 	private pollTimers = new Map<string, ReturnType<typeof setInterval>>();
+	private debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 	private lastMtime = new Map<string, number>();
 	private readonly pollInterval = 1000;
+	private readonly debounceMs = 300;
 
 	/**
 	 * Subscribe to changes in a project's beads issues
@@ -691,6 +869,11 @@ class BeadsProjectWatcher {
 			clearInterval(timer);
 			this.pollTimers.delete(projectPath);
 		}
+		const debounce = this.debounceTimers.get(projectPath);
+		if (debounce) {
+			clearTimeout(debounce);
+			this.debounceTimers.delete(projectPath);
+		}
 		this.lastMtime.delete(projectPath);
 		console.log('[beads-watcher] Stopped watching', projectPath);
 	}
@@ -723,16 +906,26 @@ class BeadsProjectWatcher {
 	}
 
 	private notifySubscribers(projectPath: string): void {
-		const subs = this.subscribers.get(projectPath);
-		if (subs) {
-			for (const callback of subs) {
-				try {
-					callback();
-				} catch (error) {
-					console.error('[beads-watcher] Subscriber error:', error);
+		// Debounce: collapse rapid file changes into a single notification
+		const existing = this.debounceTimers.get(projectPath);
+		if (existing) clearTimeout(existing);
+
+		this.debounceTimers.set(
+			projectPath,
+			setTimeout(() => {
+				this.debounceTimers.delete(projectPath);
+				const subs = this.subscribers.get(projectPath);
+				if (subs) {
+					for (const callback of subs) {
+						try {
+							callback();
+						} catch (error) {
+							console.error('[beads-watcher] Subscriber error:', error);
+						}
+					}
 				}
-			}
-		}
+			}, this.debounceMs)
+		);
 	}
 }
 
@@ -784,13 +977,16 @@ export class BeadsWsManager {
 		if (this.clients.get(projectPath)!.size === 1 && !this.unsubscribes.has(projectPath)) {
 			console.log('[ws:beads] First client for project, subscribing to watcher');
 			const unsub = beadsWatcher.subscribe(projectPath, () =>
-				this.broadcastIfChanged(projectPath)
+				this.refreshAndBroadcast(projectPath)
 			);
 			this.unsubscribes.set(projectPath, unsub);
 		}
 
-		// Send initial issues
-		this.sendToClient(client, this.createMessage(projectPath, 'connected'));
+		// Send basic issues immediately (fast, sync)
+		this.sendToClient(client, this.createMessageBasic(projectPath, 'connected'));
+
+		// Kick off async enrichment in background
+		this.enrichAndBroadcast(projectPath);
 		return true;
 	}
 
@@ -832,14 +1028,28 @@ export class BeadsWsManager {
 		}
 	}
 
-	private createMessage(projectPath: string, type: 'issues' | 'connected'): BeadsMessage {
-		const issues = getBeadsIssues(projectPath);
+	private createMessageBasic(projectPath: string, type: 'issues' | 'connected'): BeadsMessage {
+		const issues = getBeadsIssuesBasic(projectPath);
 		return { type, issues, project: projectPath, timestamp: Date.now() };
 	}
 
-	private broadcastIfChanged(projectPath: string): void {
-		const message = this.createMessage(projectPath, 'issues');
-		const hash = JSON.stringify(message.issues);
+	private async enrichAndBroadcast(projectPath: string): Promise<void> {
+		try {
+			const issues = await getBeadsIssues(projectPath);
+			this.broadcastIssues(projectPath, issues);
+		} catch (err) {
+			console.error('[ws:beads] Enrichment failed:', err);
+		}
+	}
+
+	private refreshAndBroadcast(projectPath: string): void {
+		// Fire async enrichment — non-blocking
+		this.enrichAndBroadcast(projectPath);
+	}
+
+	private broadcastIssues(projectPath: string, issues: BeadsIssue[]): void {
+		const message: BeadsMessage = { type: 'issues', issues, project: projectPath, timestamp: Date.now() };
+		const hash = JSON.stringify(issues);
 
 		if (hash === this.lastHash.get(projectPath)) {
 			return;
