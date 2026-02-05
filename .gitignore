@@ -16,6 +16,9 @@ AGENTS.md
 # Bun lockfile (using npm upstream)
 bun.lock
 
+# BMAD working directory
+_bmad/
+
 # Beads runtime files
 .beads/daemon-error
 .beads/daemon.pid
