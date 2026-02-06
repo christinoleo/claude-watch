@@ -1,13 +1,13 @@
 # Release Checklist
 
-This document outlines the process for releasing a new version of claude-watch.
+This document outlines the process for releasing a new version of claude-mux.
 
 ## Package Name
 
-The package is published to npm under the scoped name:
+The package is published to npm under the name:
 
 ```
-@aknakos/claude-watch
+claude-mux
 ```
 
 ## Semantic Versioning
@@ -125,24 +125,6 @@ npm publish --access public
 
 ## First-Time npm Setup
 
-### Scoped Package Under Your Username
-
-The package is published under your npm username scope `@aknakos`. No organization setup is required - you can publish scoped packages under your own username.
-
-### Update package.json
-
-Ensure `package.json` has the scoped name:
-
-```json
-{
-  "name": "@aknakos/claude-watch",
-  "version": "0.1.0",
-  "publishConfig": {
-    "access": "public"
-  }
-}
-```
-
 ### Login to npm
 
 ```bash
@@ -155,16 +137,16 @@ npm login
 ### 1. Verify npm Publication
 
 ```bash
-npm view @aknakos/claude-watch
+npm view claude-mux
 ```
 
 ### 2. Test Installation
 
 ```bash
 # In a clean directory
-npm install -g @aknakos/claude-watch
-claude-watch --version
-claude-watch --help
+npm install -g claude-mux
+claude-mux --version
+claude-mux --help
 ```
 
 ### 3. Create GitHub Release (Optional)
@@ -207,17 +189,9 @@ npm publish --access public
 npm login
 ```
 
-### "Package name too similar to existing package"
-
-The scoped name `@aknakos/claude-watch` should avoid this issue.
-
 ### "You do not have permission to publish"
 
-Ensure you're logged in as `aknakos` on npm.
-
-### "This package requires a paid subscription"
-
-Add `"publishConfig": { "access": "public" }` to package.json, or use `--access public` flag.
+Ensure you're logged in with the correct npm account.
 
 ## Version Sync
 

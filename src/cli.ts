@@ -5,6 +5,11 @@ import {
   createServeCommand,
   createSetupCommand,
   createUninstallCommand,
+  createSendCommand,
+  createWaitIdleCommand,
+  createStatusCommand,
+  createCaptureCommand,
+  createNewSessionCommand,
   runTui,
   runServe,
 } from "./commands/index.js";
@@ -29,6 +34,11 @@ program
 program.addCommand(createServeCommand());
 program.addCommand(createSetupCommand());
 program.addCommand(createUninstallCommand());
+program.addCommand(createSendCommand());
+program.addCommand(createWaitIdleCommand());
+program.addCommand(createStatusCommand());
+program.addCommand(createCaptureCommand());
+program.addCommand(createNewSessionCommand());
 
 // BACKWARD COMPATIBILITY: Support old flags on root command
 program

@@ -19,19 +19,17 @@ After each change, check tmux pane `0:1.1` to verify HMR worked. If the server d
 ## Build & Development Commands
 
 ```bash
-bun run build          # Build CLI + SvelteKit web app
-bun run build:cli      # Build CLI only (TypeScript)
-bun run build:web      # Build SvelteKit web app only
-bun run dev:serve      # Vite dev server with HMR
-bun test               # Run vitest tests
-bun run lint           # ESLint check
-bun run format         # Prettier formatting
+bun src/cli.ts <command>               # Run CLI directly from source (no build needed)
+bun run build                          # Build CLI + SvelteKit web app
+bun run build:cli                      # Build CLI only (TypeScript)
+bun run build:web                      # Build SvelteKit web app only
+bun run dev:serve                      # Vite dev server with HMR
+bun test                               # Run vitest tests
+bun run lint                           # ESLint check
+bun run format                         # Prettier formatting
 ```
 
-Production server (after build):
-```bash
-bun dist/cli.js serve --port 3456 --host 0.0.0.0
-```
+**Use `bun src/cli.ts` for development** — bun runs TypeScript directly, no build step needed. Only build for production (`bun dist/cli.js`).
 
 Run a single test file:
 ```bash

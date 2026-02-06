@@ -1,18 +1,18 @@
-# Removing claude-watch Hooks
+# Removing claude-mux Hooks
 
 ## Using the Cleanup Command (Recommended)
 
-The easiest way to remove claude-watch hooks is to use the built-in cleanup command:
+The easiest way to remove claude-mux hooks is to use the built-in cleanup command:
 
 ```bash
-claude-watch --cleanup
+claude-mux --cleanup
 ```
 
-This will automatically remove all claude-watch hooks from your Claude Code settings.
+This will automatically remove all claude-mux hooks from your Claude Code settings.
 
 ## Manual Removal
 
-If you need to remove the hooks manually (e.g., if claude-watch is no longer installed or the cleanup command isn't working), follow these steps:
+If you need to remove the hooks manually (e.g., if claude-mux is no longer installed or the cleanup command isn't working), follow these steps:
 
 ### 1. Locate the Settings File
 
@@ -36,9 +36,9 @@ vim ~/.claude/settings.json
 code ~/.claude/settings.json
 ```
 
-### 3. Identify claude-watch Hooks
+### 3. Identify claude-mux Hooks
 
-Look for the `"hooks"` section in the JSON. claude-watch hooks can be identified by commands containing `claude-watch-hook`. They look like this:
+Look for the `"hooks"` section in the JSON. claude-mux hooks can be identified by commands containing `claude-mux-hook`. They look like this:
 
 ```json
 {
@@ -48,7 +48,7 @@ Look for the `"hooks"` section in the JSON. claude-watch hooks can be identified
         "hooks": [
           {
             "type": "command",
-            "command": "node \"/path/to/claude-watch/dist/hooks/claude-watch-hook.js\" session-start"
+            "command": "node \"/path/to/claude-mux/dist/hooks/claude-mux-hook.js\" session-start"
           }
         ]
       }
@@ -58,7 +58,7 @@ Look for the `"hooks"` section in the JSON. claude-watch hooks can be identified
         "hooks": [
           {
             "type": "command",
-            "command": "node \"/path/to/claude-watch/dist/hooks/claude-watch-hook.js\" user-prompt-submit"
+            "command": "node \"/path/to/claude-mux/dist/hooks/claude-mux-hook.js\" user-prompt-submit"
           }
         ]
       }
@@ -70,7 +70,7 @@ Look for the `"hooks"` section in the JSON. claude-watch hooks can be identified
 
 ### 4. Remove the Hooks
 
-Remove entries for the following hook events that contain `claude-watch-hook` in the command:
+Remove entries for the following hook events that contain `claude-mux-hook` in the command:
 
 - `SessionStart`
 - `UserPromptSubmit`
@@ -82,7 +82,7 @@ Remove entries for the following hook events that contain `claude-watch-hook` in
 - `PostToolUseFailure`
 - `SessionEnd`
 
-**Important:** Only remove entries that contain `claude-watch-hook`. If you have other hooks configured (from other tools), leave those in place.
+**Important:** Only remove entries that contain `claude-mux-hook`. If you have other hooks configured (from other tools), leave those in place.
 
 ### 5. Clean Up Empty Sections
 
@@ -126,10 +126,10 @@ After modifying the settings file, restart any running Claude Code sessions for 
 
 ## Removing the Data Directory
 
-If you want to completely remove claude-watch data:
+If you want to completely remove claude-mux data:
 
 ```bash
-rm -rf ~/.claude-watch
+rm -rf ~/.claude-mux
 ```
 
-This removes the SQLite database and any other claude-watch data.
+This removes the session data and any other claude-mux data.
