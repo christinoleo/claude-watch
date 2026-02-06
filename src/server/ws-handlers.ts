@@ -611,8 +611,14 @@ interface BdListIssue {
 interface BdShowResolved {
 	id: string;
 	title: string;
+	description?: string;
 	status: string;
+	priority?: number;
 	issue_type: string;
+	owner?: string;
+	assignee?: string;
+	created_at?: string;
+	updated_at?: string;
 	dependency_type: string;
 }
 
@@ -634,6 +640,8 @@ interface BdShowIssue {
 
 /**
  * Build epic_children / parent_epic_id from bd list dependency data alone.
+ * Children declare a parent-child dependency pointing to the epic, so we scan
+ * all issues for parent-child deps whose depends_on_id is an epic.
  */
 function buildEpicRelationships(listIssues: BdListIssue[]): {
 	epicChildrenMap: Map<string, string[]>;
@@ -642,15 +650,18 @@ function buildEpicRelationships(listIssues: BdListIssue[]): {
 	const epicChildrenMap = new Map<string, string[]>();
 	const parentEpicMap = new Map<string, string>();
 
+	const epicIds = new Set(listIssues.filter((i) => i.issue_type === 'epic').map((i) => i.id));
+
 	for (const issue of listIssues) {
-		if (issue.issue_type !== 'epic' || !issue.dependencies) continue;
-		const childIds = issue.dependencies
-			.filter((d) => d.type === 'blocks')
-			.map((d) => d.depends_on_id);
-		epicChildrenMap.set(issue.id, childIds);
-		for (const childId of childIds) {
-			if (!parentEpicMap.has(childId)) {
-				parentEpicMap.set(childId, issue.id);
+		if (!issue.dependencies) continue;
+		for (const dep of issue.dependencies) {
+			if (dep.type === 'parent-child' && epicIds.has(dep.depends_on_id)) {
+				const epicId = dep.depends_on_id;
+				if (!epicChildrenMap.has(epicId)) epicChildrenMap.set(epicId, []);
+				epicChildrenMap.get(epicId)!.push(issue.id);
+				if (!parentEpicMap.has(issue.id)) {
+					parentEpicMap.set(issue.id, epicId);
+				}
 			}
 		}
 	}
@@ -672,12 +683,13 @@ function mapToBeadsIssues(
 
 	if (showMap && showMap.size > 0) {
 		// Build from resolved show data (more accurate)
+		// Children are in the epic's dependents with dependency_type 'parent-child'
 		for (const issue of listIssues) {
 			if (issue.issue_type !== 'epic') continue;
 			const showData = showMap.get(issue.id);
-			if (!showData?.dependencies) continue;
-			const childIds = showData.dependencies
-				.filter((d) => d.dependency_type === 'blocks')
+			if (!showData?.dependents) continue;
+			const childIds = showData.dependents
+				.filter((d) => d.dependency_type === 'parent-child')
 				.map((d) => d.id);
 			epicChildrenMap.set(issue.id, childIds);
 			for (const childId of childIds) {
@@ -693,7 +705,24 @@ function mapToBeadsIssues(
 		for (const [k, v] of pem) parentEpicMap.set(k, v);
 	}
 
-	return listIssues.map((li): BeadsIssue => {
+	const listIds = new Set(listIssues.map((i) => i.id));
+
+	// Collect missing epic children (e.g. closed issues not in bd list) from bd show dependents
+	const missingChildrenMap = new Map<string, { dep: BdShowResolved; epicId: string }>();
+	if (showMap && showMap.size > 0) {
+		for (const issue of listIssues) {
+			if (issue.issue_type !== 'epic') continue;
+			const showData = showMap.get(issue.id);
+			if (!showData?.dependents) continue;
+			for (const dep of showData.dependents) {
+				if (dep.dependency_type === 'parent-child' && !listIds.has(dep.id)) {
+					missingChildrenMap.set(dep.id, { dep, epicId: issue.id });
+				}
+			}
+		}
+	}
+
+	const results = listIssues.map((li): BeadsIssue => {
 		const showData = showMap?.get(li.id);
 		const isEpic = li.issue_type === 'epic';
 
@@ -738,15 +767,67 @@ function mapToBeadsIssues(
 			...(parentEpicMap.has(li.id) ? { parent_epic_id: parentEpicMap.get(li.id) } : {})
 		};
 	});
+
+	// Synthesize BeadsIssue objects for missing children (closed/deferred not in bd list)
+	for (const [, { dep, epicId }] of missingChildrenMap) {
+		results.push({
+			id: dep.id,
+			title: dep.title,
+			description: dep.description,
+			status: dep.status as BeadsIssue['status'],
+			priority: dep.priority ?? 4,
+			issue_type: dep.issue_type,
+			owner: dep.owner,
+			assignee: dep.assignee,
+			created_at: dep.created_at,
+			updated_at: dep.updated_at,
+			needs: [],
+			unblocks: [],
+			parent_epic_id: epicId
+		});
+	}
+
+	return results;
 }
 
 /**
  * Fast sync fetch: bd list only. Returns issues with epic grouping but no resolved dep titles.
  */
+/**
+ * Ensure the beads DB is in sync with the JSONL file.
+ * When another process (e.g., Claude session) modifies issues.jsonl,
+ * the server's bd database becomes stale and bd list --no-daemon fails.
+ */
+function syncBeadsDb(projectPath: string): void {
+	try {
+		execFileSync('bd', ['sync', '--import-only'], {
+			encoding: 'utf-8',
+			cwd: projectPath,
+			stdio: ['pipe', 'pipe', 'pipe'],
+			timeout: 5000
+		});
+	} catch {
+		// Sync failed — bd list may still work if DB is already current
+	}
+}
+
+async function syncBeadsDbAsync(projectPath: string): Promise<void> {
+	try {
+		await execFileAsync('bd', ['sync', '--import-only'], {
+			encoding: 'utf-8',
+			cwd: projectPath,
+			timeout: 5000
+		});
+	} catch {
+		// Sync failed — bd list may still work if DB is already current
+	}
+}
+
 export function getBeadsIssuesBasic(projectPath: string): BeadsIssue[] {
+	syncBeadsDb(projectPath);
 	let listIssues: BdListIssue[];
 	try {
-		const result = execFileSync('bd', ['list', '--json', '--limit', '0', '--no-daemon'], {
+		const result = execFileSync('bd', ['list', '--json', '--limit', '0', '--all', '--no-daemon'], {
 			encoding: 'utf-8',
 			cwd: projectPath,
 			stdio: ['pipe', 'pipe', 'pipe'],
@@ -765,6 +846,9 @@ export function getBeadsIssuesBasic(projectPath: string): BeadsIssue[] {
  * Non-blocking — does not stall the event loop.
  */
 export async function getBeadsIssues(projectPath: string): Promise<BeadsIssue[]> {
+	// Ensure DB is in sync with JSONL before querying
+	await syncBeadsDbAsync(projectPath);
+
 	// Step 1: async bd list
 	let listIssues: BdListIssue[];
 	try {
