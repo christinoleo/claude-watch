@@ -58,7 +58,13 @@
 
 <div class="issue-wrapper" class:expanded class:nested>
 	<button class="issue-item" onclick={toggleExpanded} type="button">
-		<span class="status-dot" style="background: {statusColor(issue.status)}"></span>
+		<span
+			class="status-dot"
+			class:dependency={issue.epic_relation === 'dependency'}
+			style={issue.epic_relation === 'dependency'
+				? `border-color: ${statusColor(issue.status)}`
+				: `background: ${statusColor(issue.status)}`}
+		></span>
 		<div class="issue-main">
 			<div class="issue-title-row">
 				<span class="issue-title">{issue.title}</span>
@@ -193,6 +199,14 @@
 		border-radius: 50%;
 		flex-shrink: 0;
 		margin-top: 4px;
+	}
+
+	.status-dot.dependency {
+		background: transparent;
+		border: 2px solid;
+		width: 10px;
+		height: 10px;
+		box-sizing: border-box;
 	}
 
 	.issue-main {

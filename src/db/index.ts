@@ -17,4 +17,6 @@ export {
   type SessionInput,
   type SessionUpdate,
   type Screenshot,
+  readLinks,
+  writeLink,
 } from "./sessions-json.js";

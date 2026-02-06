@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { sessionStore, stateColor } from '$lib/stores/sessions.svelte';
+	import { sessionStore, stateColor, groupSessions } from '$lib/stores/sessions.svelte';
 	import { inputInjection } from '$lib/stores/input-injection.svelte';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
@@ -104,22 +104,62 @@
 				</button>
 
 				{#if sessionsExpanded}
+					{@const grouped = groupSessions(projectSessions)}
 					<div class="sessions-list">
-						{#each projectSessions as session (session.id)}
-							{#if session.tmux_target}
+						{#each grouped as item}
+							{#if item.type === 'pair'}
+								<div class="session-pair">
+									{#if item.main.tmux_target}
+										<a
+											href="/session/{encodeURIComponent(item.main.tmux_target)}"
+											class="session-item"
+											class:active={item.main.tmux_target === currentTarget || item.main.id === currentTarget}
+											onclick={onSelect}
+										>
+											<span class="icon-slot">
+												<span class="state-dot" style="background: {stateColor(item.main.state)}"></span>
+											</span>
+											<div class="session-info">
+												<div class="session-name">{item.main.pane_title || item.main.tmux_target}</div>
+												{#if item.main.current_action}
+													<div class="session-action">{item.main.current_action}</div>
+												{/if}
+											</div>
+										</a>
+									{/if}
+									{#if item.orchestrator.tmux_target}
+										<a
+											href="/session/{encodeURIComponent(item.orchestrator.tmux_target)}"
+											class="session-item orchestrator"
+											class:active={item.orchestrator.tmux_target === currentTarget || item.orchestrator.id === currentTarget}
+											onclick={onSelect}
+										>
+											<span class="icon-slot">
+												<span class="state-dot" style="background: {stateColor(item.orchestrator.state)}"></span>
+											</span>
+											<div class="session-info">
+												<div class="session-name">{item.orchestrator.pane_title || item.orchestrator.tmux_target}</div>
+												{#if item.orchestrator.current_action}
+													<div class="session-action">{item.orchestrator.current_action}</div>
+												{/if}
+											</div>
+										</a>
+									{/if}
+								</div>
+							{:else if item.session.tmux_target}
 								<a
-									href="/session/{encodeURIComponent(session.tmux_target)}"
+									href="/session/{encodeURIComponent(item.session.tmux_target)}"
 									class="session-item"
-									class:active={session.tmux_target === currentTarget || session.id === currentTarget}
+									class:active={item.session.tmux_target === currentTarget || item.session.id === currentTarget}
 									onclick={onSelect}
 								>
 									<span class="icon-slot">
-										<span class="state-dot" style="background: {stateColor(session.state)}"></span>
+										<span class="state-dot" style="background: {stateColor(item.session.state)}"></span>
 									</span>
 									<div class="session-info">
-										<div class="session-name">{session.pane_title || session.tmux_target}</div>
-										{#if session.current_action}
-											<div class="session-action">{session.current_action}</div>
+										<div class="session-name">{item.session.pane_title || item.session.tmux_target}</div>
+										{#if item.session.current_action}
+											<div class="session-action">{item.session.current_action}</div>
 										{/if}
 									</div>
 								</a>
@@ -230,6 +270,19 @@
 		padding: 0 12px 12px;
 	}
 
+	/* Session pair: side-by-side in sidebar */
+	.session-pair {
+		display: flex;
+		gap: 4px;
+		margin-bottom: 4px;
+	}
+
+	.session-pair .session-item {
+		flex: 1;
+		min-width: 0;
+		margin-bottom: 0;
+	}
+
 	.session-item {
 		display: flex;
 		align-items: flex-start;
@@ -264,6 +317,15 @@
 
 	.session-item.active .session-name {
 		color: var(--primary);
+	}
+
+	/* Orchestrator: dimmer appearance */
+	.session-item.orchestrator {
+		opacity: 0.7;
+	}
+
+	.session-item.orchestrator .session-name {
+		color: hsl(var(--muted-foreground));
 	}
 
 	.icon-slot {

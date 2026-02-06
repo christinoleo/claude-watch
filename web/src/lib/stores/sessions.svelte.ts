@@ -21,6 +21,7 @@ export interface Session {
 	pane_title?: string | null;
 	screenshots?: Screenshot[];
 	chrome_active?: boolean;
+	linked_to?: string | null;
 }
 
 class SessionStore extends ReliableWebSocket {
@@ -95,6 +96,50 @@ export function stateColor(state: string): string {
 		default:
 			return '#666';
 	}
+}
+
+export type SessionGroup =
+	| { type: 'pair'; main: Session; orchestrator: Session }
+	| { type: 'single'; session: Session };
+
+/**
+ * Group sessions into linked pairs (main + orchestrator) and singles.
+ * Pairs are identified by the orchestrator's linked_to field pointing to the main's id.
+ */
+export function groupSessions(sessions: Session[]): SessionGroup[] {
+	// Map: mainId -> orchestrator session
+	const orchestratorByMain = new Map<string, Session>();
+	for (const s of sessions) {
+		if (s.linked_to) {
+			orchestratorByMain.set(s.linked_to, s);
+		}
+	}
+
+	const result: SessionGroup[] = [];
+	const processed = new Set<string>();
+
+	for (const s of sessions) {
+		if (processed.has(s.id)) continue;
+
+		const orchestrator = orchestratorByMain.get(s.id);
+		if (orchestrator && !processed.has(orchestrator.id)) {
+			result.push({ type: 'pair', main: s, orchestrator });
+			processed.add(s.id);
+			processed.add(orchestrator.id);
+		} else if (!s.linked_to) {
+			result.push({ type: 'single', session: s });
+			processed.add(s.id);
+		}
+	}
+
+	// Remaining orphaned orchestrators (main was cleaned up)
+	for (const s of sessions) {
+		if (!processed.has(s.id)) {
+			result.push({ type: 'single', session: s });
+		}
+	}
+
+	return result;
 }
 
 export function getProjectColor(cwd: string): string {

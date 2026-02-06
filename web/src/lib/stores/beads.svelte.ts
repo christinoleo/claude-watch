@@ -7,7 +7,8 @@ export type {
 	BeadsMessage,
 	BeadsFilter,
 	EpicGroup,
-	BeadsStatus
+	BeadsStatus,
+	EpicRelation
 } from '$shared/types/beads.js';
 import type { BeadsIssue, BeadsMessage, BeadsFilter, EpicGroup } from '$shared/types/beads.js';
 
@@ -16,9 +17,16 @@ function hasNoActiveNeeds(issue: BeadsIssue): boolean {
 	return issue.needs.every((n) => n.status === 'closed');
 }
 
-/** Sort tasks: in_progress → ready (no active needs) → blocked → by priority */
+/** Sort tasks: children before dependencies, then in_progress → ready → blocked → by priority */
 function sortTasks(tasks: BeadsIssue[]): BeadsIssue[] {
 	return [...tasks].sort((a, b) => {
+		// Direct children before transitive dependencies
+		const relationOrder = (i: BeadsIssue): number =>
+			i.epic_relation === 'dependency' ? 1 : 0;
+		const ar = relationOrder(a);
+		const br = relationOrder(b);
+		if (ar !== br) return ar - br;
+
 		const order = (i: BeadsIssue): number => {
 			if (i.status === 'in_progress') return 0;
 			if (i.status === 'open' && hasNoActiveNeeds(i)) return 1;

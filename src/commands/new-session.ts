@@ -1,7 +1,8 @@
 import { Command } from "commander";
 import { execFileSync } from "child_process";
 import { existsSync, statSync } from "fs";
-import { upsertSession } from "../db/sessions-json.js";
+import { upsertSession, writeLink } from "../db/sessions-json.js";
+import { resolveSession } from "./resolve-session.js";
 
 export function createNewSessionCommand(): Command {
   return new Command("new-session")
@@ -9,7 +10,8 @@ export function createNewSessionCommand(): Command {
     .requiredOption("--cwd <path>", "Working directory for the new session")
     .option("--name <name>", "Custom session name (default: claude-<timestamp>)")
     .option("--no-skip-permissions", "Don't add --dangerously-skip-permissions")
-    .action((options: { cwd: string; name?: string; skipPermissions: boolean }) => {
+    .option("--linked-to <target>", "Link to an existing session (ID or tmux target)")
+    .action((options: { cwd: string; name?: string; skipPermissions: boolean; linkedTo?: string }) => {
       const cwd = options.cwd;
 
       if (!existsSync(cwd)) {
@@ -45,6 +47,13 @@ export function createNewSessionCommand(): Command {
           encoding: "utf-8",
         }).trim() || "0";
         const tmuxTarget = `${sessionName}:${baseIndex}.${paneBaseIndex}`;
+
+        // Write link to separate file (survives hook overwrites)
+        if (options.linkedTo) {
+          const linked = resolveSession(options.linkedTo);
+          const mainTarget = linked?.tmux_target || options.linkedTo;
+          writeLink(tmuxTarget, mainTarget);
+        }
 
         // Pre-register session so it appears in the dashboard
         const id = crypto.randomUUID();

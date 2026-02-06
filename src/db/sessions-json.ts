@@ -14,6 +14,7 @@ import { isPidAlive } from "../utils/pid.js";
 // Paths
 const CLAUDE_WATCH_DIR = join(homedir(), ".claude-watch");
 const DEFAULT_SESSIONS_DIR = join(CLAUDE_WATCH_DIR, "sessions");
+const LINKS_PATH = join(CLAUDE_WATCH_DIR, "links.json");
 
 // Schema version
 const SCHEMA_VERSION = 1;
@@ -49,6 +50,7 @@ export interface Session {
   last_update: number;
   screenshots?: Screenshot[];
   chrome_active?: boolean;
+  linked_to?: string | null;
 }
 
 export interface SessionInput {
@@ -61,6 +63,7 @@ export interface SessionInput {
   state?: SessionState;
   current_action?: string | null;
   prompt_text?: string | null;
+  linked_to?: string | null;
 }
 
 export interface SessionUpdate {
@@ -128,6 +131,7 @@ export function upsertSession(input: SessionInput): void {
     current_action: input.current_action ?? existing?.current_action ?? null,
     prompt_text: input.prompt_text ?? existing?.prompt_text ?? null,
     last_update: Date.now(),
+    linked_to: input.linked_to ?? existing?.linked_to ?? null,
   };
 
   writeSessionFile(session);
@@ -299,4 +303,34 @@ export function cleanupStaleSessions(): number {
  */
 export function getSessionsDir(): string {
   return sessionsDir;
+}
+
+// ============================================================================
+// Session Links (separate file, not touched by hooks)
+// ============================================================================
+
+/**
+ * Read all session links. Returns a map of orchestratorTmuxTarget → mainTmuxTarget.
+ */
+export function readLinks(): Record<string, string> {
+  try {
+    if (!existsSync(LINKS_PATH)) return {};
+    return JSON.parse(readFileSync(LINKS_PATH, "utf-8"));
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Write a session link (orchestrator → main, by tmux target).
+ */
+export function writeLink(orchestratorTarget: string, mainTarget: string): void {
+  const links = readLinks();
+  links[orchestratorTarget] = mainTarget;
+  if (!existsSync(CLAUDE_WATCH_DIR)) {
+    mkdirSync(CLAUDE_WATCH_DIR, { recursive: true });
+  }
+  const tmpPath = LINKS_PATH + ".tmp";
+  writeFileSync(tmpPath, JSON.stringify(links, null, 2));
+  renameSync(tmpPath, LINKS_PATH);
 }

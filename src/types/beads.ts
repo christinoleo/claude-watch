@@ -9,6 +9,8 @@ export interface ResolvedDep {
 	type: string; // issue_type
 }
 
+export type EpicRelation = 'child' | 'dependency';
+
 export interface BeadsIssue {
 	id: string;
 	title: string;
@@ -24,6 +26,8 @@ export interface BeadsIssue {
 	unblocks: ResolvedDep[];
 	epic_children?: string[];
 	parent_epic_id?: string;
+	/** How this issue relates to its parent epic: direct child or transitive dependency */
+	epic_relation?: EpicRelation;
 }
 
 export interface BeadsMessage {

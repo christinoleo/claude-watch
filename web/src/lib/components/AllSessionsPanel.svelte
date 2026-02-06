@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { sessionStore, stateColor, getProjectColor, type Session } from '$lib/stores/sessions.svelte';
+	import { sessionStore, stateColor, getProjectColor, groupSessions, type Session } from '$lib/stores/sessions.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Checkbox } from '$lib/components/ui/checkbox';
@@ -238,6 +238,58 @@
 	}
 </script>
 
+{#snippet sessionCard(session: Session, isOrchestrator: boolean)}
+	{#if session.tmux_target}
+		{@const isActive = session.tmux_target === currentTarget}
+		<a
+			href="/session/{encodeURIComponent(session.tmux_target)}"
+			class="session {session.state}"
+			class:active={isActive}
+			class:orchestrator={isOrchestrator}
+			onclick={(e) => handleSessionClick(e, session.tmux_target!)}
+		>
+			<span class="state" style="background: {stateColor(session.state)}"></span>
+			<div class="session-info">
+				<div class="target">{session.pane_title || session.tmux_target}</div>
+				<div class="action">{session.current_action || session.state}</div>
+			</div>
+			{#if !compact}
+				<div class="actions">
+					<Button
+						variant="ghost-destructive"
+						size="icon-sm"
+						onclick={(e: MouseEvent) => { e.preventDefault(); e.stopPropagation(); killSession(session.id, session.pid, session.tmux_target); }}
+						title="Kill"
+					>
+						<iconify-icon icon="mdi:power"></iconify-icon>
+					</Button>
+				</div>
+			{/if}
+		</a>
+	{:else}
+		<div class="session {session.state} no-tmux" class:orchestrator={isOrchestrator}>
+			<span class="state" style="background: {stateColor(session.state)}"></span>
+			<div class="session-info">
+				<div class="target">{session.id}</div>
+				<div class="action">{session.current_action || session.state}</div>
+				<div class="no-tmux-label">No tmux pane</div>
+			</div>
+			{#if !compact}
+				<div class="actions">
+					<Button
+						variant="ghost-destructive"
+						size="icon-sm"
+						onclick={() => killSession(session.id, session.pid, session.tmux_target)}
+						title="Kill"
+					>
+						<iconify-icon icon="mdi:power"></iconify-icon>
+					</Button>
+				</div>
+			{/if}
+		</div>
+	{/if}
+{/snippet}
+
 <div class="all-sessions-panel" class:compact>
 	<header class="header">
 		<a href="/" class="title-link">
@@ -278,6 +330,7 @@
 				{@const color = getProjectColor(project.cwd)}
 				{@const isNested = project.depth > 0}
 				{@const firstSession = project.sessions[0]}
+				{@const grouped = groupSessions(project.sessions)}
 				<div class="project-group" class:nested={isNested} style="margin-left: {project.depth * (compact ? 16 : 24)}px; border-left-color: {color}">
 					<div class="project-header">
 						<div class="project-info">
@@ -305,54 +358,14 @@
 						</div>
 					</div>
 					<div class="project-sessions">
-						{#each project.sessions as session}
-							{#if session.tmux_target}
-								{@const isActive = session.tmux_target === currentTarget}
-								<a
-									href="/session/{encodeURIComponent(session.tmux_target)}"
-									class="session {session.state}"
-									class:active={isActive}
-									onclick={(e) => handleSessionClick(e, session.tmux_target!)}
-								>
-									<span class="state" style="background: {stateColor(session.state)}"></span>
-									<div class="session-info">
-										<div class="target">{session.pane_title || session.tmux_target}</div>
-										<div class="action">{session.current_action || session.state}</div>
-									</div>
-									{#if !compact}
-										<div class="actions">
-											<Button
-												variant="ghost-destructive"
-												size="icon-sm"
-												onclick={(e: MouseEvent) => { e.preventDefault(); e.stopPropagation(); killSession(session.id, session.pid, session.tmux_target); }}
-												title="Kill"
-											>
-												<iconify-icon icon="mdi:power"></iconify-icon>
-											</Button>
-										</div>
-									{/if}
-								</a>
-							{:else}
-								<div class="session {session.state} no-tmux">
-									<span class="state" style="background: {stateColor(session.state)}"></span>
-									<div class="session-info">
-										<div class="target">{session.id}</div>
-										<div class="action">{session.current_action || session.state}</div>
-										<div class="no-tmux-label">No tmux pane</div>
-									</div>
-									{#if !compact}
-										<div class="actions">
-											<Button
-												variant="ghost-destructive"
-												size="icon-sm"
-												onclick={() => killSession(session.id, session.pid, session.tmux_target)}
-												title="Kill"
-											>
-												<iconify-icon icon="mdi:power"></iconify-icon>
-											</Button>
-										</div>
-									{/if}
+						{#each grouped as item}
+							{#if item.type === 'pair'}
+								<div class="session-pair">
+									{@render sessionCard(item.main, false)}
+									{@render sessionCard(item.orchestrator, true)}
 								</div>
+							{:else}
+								{@render sessionCard(item.session, false)}
 							{/if}
 						{:else}
 							<div class="empty-project">No active sessions</div>
@@ -562,6 +575,19 @@
 		opacity: 1;
 	}
 
+	/* Session pair: side-by-side layout */
+	.session-pair {
+		display: flex;
+		gap: 1px;
+		border-top: 1px solid #222;
+	}
+
+	.session-pair > :global(.session) {
+		flex: 1;
+		min-width: 0;
+		border-top: none;
+	}
+
 	.project-sessions .session {
 		display: flex;
 		align-items: center;
@@ -588,6 +614,21 @@
 
 	.project-sessions .session.active .target {
 		color: var(--primary);
+	}
+
+	/* Orchestrator session: dimmer styling */
+	.project-sessions :global(.session.orchestrator) {
+		background: #0c0c0c;
+		border-left: 2px solid #333;
+		padding-left: 8px;
+	}
+
+	.project-sessions :global(.session.orchestrator:hover) {
+		background: #151515;
+	}
+
+	.project-sessions :global(.session.orchestrator .target) {
+		color: hsl(var(--muted-foreground));
 	}
 
 	.session .state {
@@ -786,4 +827,5 @@
 	.compact .session .action {
 		font-size: 11px;
 	}
+
 </style>

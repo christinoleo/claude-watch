@@ -59,6 +59,7 @@ interface Session {
   last_update: number;
   screenshots?: Screenshot[];
   chrome_active?: boolean;
+  linked_to?: string | null;
 }
 
 interface HookInput {
@@ -113,9 +114,11 @@ function deleteSessionFile(id: string): void {
 }
 
 // Delete any existing sessions with the same tmux_target (cleanup stale sessions)
-function deleteSessionsByTmuxTarget(tmuxTarget: string, excludeId?: string): void {
+// Returns linked_to from any deleted session so callers can preserve it.
+function deleteSessionsByTmuxTarget(tmuxTarget: string, excludeId?: string): string | null {
+  let linkedTo: string | null = null;
   try {
-    if (!existsSync(SESSIONS_DIR)) return;
+    if (!existsSync(SESSIONS_DIR)) return null;
 
     const files = readdirSync(SESSIONS_DIR).filter(f => f.endsWith(".json"));
     for (const file of files) {
@@ -124,6 +127,7 @@ function deleteSessionsByTmuxTarget(tmuxTarget: string, excludeId?: string): voi
 
       const session = readSession(id);
       if (session && session.tmux_target === tmuxTarget) {
+        if (session.linked_to) linkedTo = session.linked_to;
         debugLog(`deleteSessionsByTmuxTarget: removing stale session ${id} with target ${tmuxTarget}`);
         deleteSessionFile(id);
       }
@@ -131,6 +135,7 @@ function deleteSessionsByTmuxTarget(tmuxTarget: string, excludeId?: string): voi
   } catch {
     // Ignore errors during cleanup
   }
+  return linkedTo;
 }
 
 function getTmuxTarget(): string | null {
@@ -270,8 +275,10 @@ function handleSessionStart(input: HookInput): void {
   const tmuxTarget = getTmuxTarget();
 
   // Clean up any stale sessions with the same tmux_target before creating new one
+  // Preserve linked_to from pre-registered sessions (set by new-session --linked-to)
+  let linkedTo: string | null = null;
   if (tmuxTarget) {
-    deleteSessionsByTmuxTarget(tmuxTarget, input.session_id);
+    linkedTo = deleteSessionsByTmuxTarget(tmuxTarget, input.session_id);
   }
 
   const gitRoot = getGitRoot(input.cwd);
@@ -289,6 +296,7 @@ function handleSessionStart(input: HookInput): void {
     current_action: null,
     prompt_text: null,
     last_update: Date.now(),
+    linked_to: linkedTo,
   };
   writeSession(session);
 }
@@ -299,8 +307,9 @@ function getOrCreateSession(input: HookInput): Session {
 
   // Session doesn't exist (e.g., resumed session) - create it
   const tmuxTarget = getTmuxTarget();
+  let linkedTo: string | null = null;
   if (tmuxTarget) {
-    deleteSessionsByTmuxTarget(tmuxTarget, input.session_id);
+    linkedTo = deleteSessionsByTmuxTarget(tmuxTarget, input.session_id);
   }
 
   const gitRoot = getGitRoot(input.cwd);
@@ -316,6 +325,7 @@ function getOrCreateSession(input: HookInput): Session {
     current_action: null,
     prompt_text: null,
     last_update: Date.now(),
+    linked_to: linkedTo,
   };
 }
 

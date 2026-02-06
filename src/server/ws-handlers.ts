@@ -12,7 +12,7 @@ import { execFileSync, execFile } from 'child_process';
 import { promisify } from 'util';
 
 const execFileAsync = promisify(execFile);
-import { getAllSessions, updateSession, type Session } from '../db/index.js';
+import { getAllSessions, updateSession, readLinks, type Session } from '../db/index.js';
 import { checkForInterruption, getPaneTitle } from '../tmux/pane.js';
 import { resizeTmuxWindow } from '../tmux/resize.js';
 import { sessionWatcher } from './watcher.js';
@@ -150,10 +150,26 @@ function deduplicateByTmuxTarget<T extends { tmux_target: string | null; last_up
 export function getEnrichedSessions(): (Session & { pane_title: string | null })[] {
 	syncSessionStates();
 	const sessions = getAllSessions();
-	const enrichedSessions = sessions.map((s) => ({
-		...s,
-		pane_title: s.tmux_target ? getPaneTitle(s.tmux_target) : null
-	}));
+	const links = readLinks();
+
+	const enrichedSessions = sessions.map((s) => {
+		const enriched: Session & { pane_title: string | null } = {
+			...s,
+			pane_title: s.tmux_target ? getPaneTitle(s.tmux_target) : null
+		};
+
+		// Merge linked_to from links file (orchestratorTarget → mainTarget)
+		if (s.tmux_target && links[s.tmux_target]) {
+			const mainTarget = links[s.tmux_target];
+			const mainSession = sessions.find((m) => m.tmux_target === mainTarget);
+			if (mainSession) {
+				enriched.linked_to = mainSession.id;
+			}
+		}
+
+		return enriched;
+	});
+
 	return deduplicateByTmuxTarget(enrichedSessions);
 }
 
@@ -680,6 +696,8 @@ function mapToBeadsIssues(
 ): BeadsIssue[] {
 	const epicChildrenMap = new Map<string, string[]>();
 	const parentEpicMap = new Map<string, string>();
+	// Track whether a task is a direct child or transitive dependency of its epic
+	const epicRelationMap = new Map<string, 'child' | 'dependency'>();
 
 	if (showMap && showMap.size > 0) {
 		// Build from resolved show data (more accurate)
@@ -696,6 +714,33 @@ function mapToBeadsIssues(
 				if (!parentEpicMap.has(childId)) {
 					parentEpicMap.set(childId, issue.id);
 				}
+				epicRelationMap.set(childId, 'child');
+			}
+		}
+
+		// BFS: walk blocks dependents from epic children to collect transitive dependencies
+		for (const [epicId, seedIds] of epicChildrenMap) {
+			const queue = [...seedIds];
+			const visited = new Set(seedIds);
+			visited.add(epicId);
+
+			while (queue.length > 0) {
+				const current = queue.shift()!;
+				const currentShow = showMap.get(current);
+				if (!currentShow?.dependents) continue;
+
+				for (const dep of currentShow.dependents) {
+					if (dep.dependency_type === 'parent-child') continue;
+					if (visited.has(dep.id)) continue;
+					visited.add(dep.id);
+
+					epicChildrenMap.get(epicId)!.push(dep.id);
+					if (!parentEpicMap.has(dep.id)) {
+						parentEpicMap.set(dep.id, epicId);
+					}
+					epicRelationMap.set(dep.id, 'dependency');
+					queue.push(dep.id);
+				}
 			}
 		}
 	} else {
@@ -703,6 +748,47 @@ function mapToBeadsIssues(
 		const { epicChildrenMap: ecm, parentEpicMap: pem } = buildEpicRelationships(listIssues);
 		for (const [k, v] of ecm) epicChildrenMap.set(k, v);
 		for (const [k, v] of pem) parentEpicMap.set(k, v);
+		// Mark all from fallback as children (no dependency data available)
+		for (const [, childIds] of ecm) {
+			for (const childId of childIds) {
+				epicRelationMap.set(childId, 'child');
+			}
+		}
+
+		// Fallback BFS using bd list dependencies (reverse direction)
+		const epicIds = new Set(listIssues.filter((i) => i.issue_type === 'epic').map((i) => i.id));
+		// Build reverse map: depends_on_id → issue IDs that depend on it (blocks relationship)
+		const blockedByMap = new Map<string, string[]>();
+		for (const issue of listIssues) {
+			if (!issue.dependencies) continue;
+			for (const dep of issue.dependencies) {
+				if (dep.type === 'parent-child') continue;
+				if (!blockedByMap.has(dep.depends_on_id)) blockedByMap.set(dep.depends_on_id, []);
+				blockedByMap.get(dep.depends_on_id)!.push(issue.id);
+			}
+		}
+		for (const [epicId, seedIds] of epicChildrenMap) {
+			const queue = [...seedIds];
+			const visited = new Set(seedIds);
+			visited.add(epicId);
+
+			while (queue.length > 0) {
+				const current = queue.shift()!;
+				const dependents = blockedByMap.get(current) ?? [];
+				for (const depId of dependents) {
+					if (visited.has(depId)) continue;
+					if (epicIds.has(depId)) continue;
+					visited.add(depId);
+
+					epicChildrenMap.get(epicId)!.push(depId);
+					if (!parentEpicMap.has(depId)) {
+						parentEpicMap.set(depId, epicId);
+					}
+					epicRelationMap.set(depId, 'dependency');
+					queue.push(depId);
+				}
+			}
+		}
 	}
 
 	const listIds = new Set(listIssues.map((i) => i.id));
@@ -764,7 +850,8 @@ function mapToBeadsIssues(
 			needs,
 			unblocks,
 			...(isEpic ? { epic_children: epicChildrenMap.get(li.id) ?? [] } : {}),
-			...(parentEpicMap.has(li.id) ? { parent_epic_id: parentEpicMap.get(li.id) } : {})
+			...(parentEpicMap.has(li.id) ? { parent_epic_id: parentEpicMap.get(li.id) } : {}),
+			...(epicRelationMap.has(li.id) ? { epic_relation: epicRelationMap.get(li.id) } : {})
 		};
 	});
 
