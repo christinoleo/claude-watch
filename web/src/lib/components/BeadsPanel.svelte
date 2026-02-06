@@ -7,12 +7,10 @@
 
 	interface Props {
 		project: string | null;
-		sessionId?: string | null;
-		tmuxTarget?: string | null;
 		onSelect?: (issue: BeadsIssue) => void;
 	}
 
-	let { project, sessionId = null, tmuxTarget = null, onSelect }: Props = $props();
+	let { project, onSelect }: Props = $props();
 
 	let expanded = $state(true);
 
@@ -78,7 +76,7 @@
 					<div class="empty">No issues</div>
 				{:else}
 					{#each beadsStore.epicGroups as group (group.epic.id)}
-						<EpicSection {group} onSelect={handleIssueSelect} {sessionId} {tmuxTarget} {project} />
+						<EpicSection {group} onSelect={handleIssueSelect} />
 					{/each}
 
 					{#if hasEpics && hasOrphans}

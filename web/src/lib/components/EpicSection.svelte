@@ -2,17 +2,13 @@
 	import type { BeadsIssue, EpicGroup } from '$lib/stores/beads.svelte';
 	import { statusColor, priorityColor } from '$shared/types/beads.js';
 	import IssueItem from './IssueItem.svelte';
-	import BatchRunControls from './BatchRunControls.svelte';
 
 	interface Props {
 		group: EpicGroup;
 		onSelect?: (issue: BeadsIssue) => void;
-		sessionId?: string | null;
-		tmuxTarget?: string | null;
-		project?: string | null;
 	}
 
-	let { group, onSelect, sessionId = null, tmuxTarget = null, project = null }: Props = $props();
+	let { group, onSelect }: Props = $props();
 
 	let expanded = $state(false);
 
@@ -55,12 +51,6 @@
 	<div class="progress-bar-track">
 		<div class="progress-bar-fill" style="width: {progressPercent}%"></div>
 	</div>
-
-	{#if sessionId && tmuxTarget && project}
-		<div class="batch-run-slot">
-			<BatchRunControls {sessionId} {tmuxTarget} {project} epicId={group.epic.id} />
-		</div>
-	{/if}
 
 	{#if expanded}
 		<div class="epic-tasks">
@@ -187,10 +177,6 @@
 		background: #27ae60;
 		border-radius: 2px;
 		transition: width 0.3s ease;
-	}
-
-	.batch-run-slot {
-		padding: 4px 12px;
 	}
 
 	.epic-tasks {

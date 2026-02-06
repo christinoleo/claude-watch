@@ -136,8 +136,6 @@
 		{#if currentSession?.beads_enabled}
 			<BeadsPanel
 				project={currentSession.git_root}
-				sessionId={currentSession.id}
-				tmuxTarget={currentSession.tmux_target}
 				onSelect={handleIssueSelect}
 			/>
 		{/if}
