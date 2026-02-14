@@ -939,7 +939,7 @@ export async function getBeadsIssues(projectPath: string): Promise<BeadsIssue[]>
 	// Step 1: async bd list
 	let listIssues: BdListIssue[];
 	try {
-		const { stdout } = await execFileAsync('bd', ['list', '--json', '--limit', '0', '--no-daemon'], {
+		const { stdout } = await execFileAsync('bd', ['list', '--json', '--limit', '0', '--all', '--no-daemon'], {
 			encoding: 'utf-8',
 			cwd: projectPath,
 			timeout: 5000

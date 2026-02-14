@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { existsSync, statSync } from 'fs';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { upsertSession } from '$shared/db/index.js';
 
 export const POST: RequestHandler = async ({ request }) => {
@@ -23,7 +23,13 @@ export const POST: RequestHandler = async ({ request }) => {
 		// Create new tmux window and run claude in the specified directory
 		const sessionName = 'claude-' + Date.now();
 		const tmuxTarget = sessionName + ':1.1';
-		execSync(`tmux new-session -d -s "${sessionName}" -c "${cwd}" -- claude --dangerously-skip-permissions`, {
+
+		// Use 'env -u CLAUDECODE' so Claude doesn't refuse to start
+		// (tmux server's global env may have CLAUDECODE=1 from a parent session)
+		execFileSync('tmux', [
+			'new-session', '-d', '-s', sessionName, '-c', cwd,
+			'--', 'env', '-u', 'CLAUDECODE', 'claude', '--dangerously-skip-permissions'
+		], {
 			stdio: 'ignore'
 		});
 

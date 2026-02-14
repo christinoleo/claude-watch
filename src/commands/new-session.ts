@@ -36,7 +36,9 @@ export function createNewSessionCommand(): Command {
       }
 
       try {
-        const tmuxArgs = ["new-session", "-d", "-s", sessionName, "-c", cwd, "--", ...claudeArgs];
+        // Use 'env -u CLAUDECODE' so Claude doesn't refuse to start
+        // (tmux server's global env may have CLAUDECODE=1 from a parent session)
+        const tmuxArgs = ["new-session", "-d", "-s", sessionName, "-c", cwd, "--", "env", "-u", "CLAUDECODE", ...claudeArgs];
         execFileSync("tmux", tmuxArgs, { stdio: "ignore" });
 
         // Detect actual base-index from tmux config
