@@ -10,6 +10,7 @@
 	import { inputInjection } from '$lib/stores/input-injection.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as AlertDialog from '$lib/components/ui/alert-dialog';
+	import * as Popover from '$lib/components/ui/popover';
 	import TerminalRenderer from '$lib/components/TerminalRenderer.svelte';
 
 	const target = $derived($page.params.target ? decodeURIComponent($page.params.target) : null);
@@ -22,6 +23,43 @@
 
 	let textInput = $state('');
 	let showConfirmKill = $state(false);
+	let moreOpen = $state(false);
+	let commandsOpen = $state(false);
+
+	const moreKeys: { label: string; keys: string; icon: string }[] = [
+		{ label: 'Left', keys: 'Left', icon: 'mdi:arrow-left' },
+		{ label: 'Right', keys: 'Right', icon: 'mdi:arrow-right' },
+		{ label: 'Space', keys: 'Space', icon: 'mdi:keyboard-space' },
+		{ label: 'Tab', keys: 'Tab', icon: 'mdi:keyboard-tab' },
+		{ label: 'Enter', keys: 'Enter', icon: 'mdi:keyboard-return' },
+		{ label: 'PgUp', keys: 'PageUp', icon: 'mdi:chevron-double-up' },
+		{ label: 'PgDn', keys: 'PageDown', icon: 'mdi:chevron-double-down' },
+		{ label: 'Home', keys: 'Home', icon: 'mdi:page-first' },
+		{ label: 'End', keys: 'End', icon: 'mdi:page-last' },
+	];
+
+	const commands: { label: string; text: string; icon: string }[] = [
+		{ label: 'Ctrl-L', text: '', icon: 'mdi:eraser' },
+		{ label: '/clear', text: '/clear', icon: 'mdi:broom' },
+		{ label: '/ak:linus', text: '/ak:linus', icon: 'mdi:code-tags-check' },
+		{ label: '/ak:replan', text: '/ak:replan', icon: 'mdi:clipboard-text-outline' },
+		{ label: '/ak:redelta', text: '/ak:redelta', icon: 'mdi:compare' },
+		{ label: '/ak:triage', text: '/ak:triage', icon: 'mdi:sort-variant' },
+		{ label: '/ak:verify', text: '/ak:verify', icon: 'mdi:check-decagram' },
+		{ label: '/ak:bcheck', text: '/ak:bcheck', icon: 'mdi:checkbox-marked-circle-outline' },
+		{ label: '/ak:p1', text: '/ak:p1', icon: 'mdi:numeric-1-circle' },
+		{ label: '/ak:p2', text: '/ak:p2', icon: 'mdi:numeric-2-circle' },
+		{ label: '/ak:plan-to-beads', text: '/ak:plan-to-beads', icon: 'mdi:sitemap' },
+	];
+
+	function fillInput(text: string) {
+		textInput = textInput ? textInput + ' ' + text : text;
+		commandsOpen = false;
+		if (textareaElement) {
+			textareaElement.focus();
+			setTimeout(autoResize, 0);
+		}
+	}
 	let outputElement: HTMLDivElement | null = $state(null);
 	let textareaElement: HTMLTextAreaElement | null = $state(null);
 	let userScrolledUp = $state(false);
@@ -299,28 +337,50 @@
 			<iconify-icon icon="mdi:arrow-down"></iconify-icon>
 			<span>Down</span>
 		</Button>
-		<Button variant="secondary" size="toolbar" class="flex-1" onclick={() => sendKeys('Space')}>
-			<iconify-icon icon="mdi:keyboard-space"></iconify-icon>
-			<span>Space</span>
-		</Button>
-		<Button variant="secondary" size="toolbar" class="flex-1" onclick={() => sendKeys('Tab')}>
-			<iconify-icon icon="mdi:keyboard-tab"></iconify-icon>
-			<span>Tab</span>
-		</Button>
-		<Button variant="secondary" size="toolbar" class="flex-1" onclick={() => sendKeys('C-l')}>
-			<iconify-icon icon="mdi:eraser"></iconify-icon>
-			<span>Ctrl-L</span>
-		</Button>
-		<Button variant="secondary" size="toolbar" class="flex-1" onclick={async () => {
-			await fetch(`/api/sessions/${encodeURIComponent(target)}/send`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ text: '/clear' })
-			});
-		}}>
-			<iconify-icon icon="mdi:broom"></iconify-icon>
-			<span>/clear</span>
-		</Button>
+
+		<!-- More keys popover -->
+		<Popover.Root bind:open={moreOpen}>
+			<Popover.Trigger class="flex-1 flex-col gap-0.5 px-2 py-1.5 min-w-11 h-auto text-[9px] uppercase tracking-wide inline-flex shrink-0 items-center justify-center rounded-md font-medium cursor-pointer bg-[#222] text-stone-100 hover:bg-[#333]">
+				<iconify-icon icon="mdi:dots-horizontal" style="font-size: 18px;"></iconify-icon>
+				<span>More</span>
+			</Popover.Trigger>
+			<Popover.Content side="top" class="w-auto max-w-[280px] p-2 bg-[#1a1a1a] border-[#333]">
+				<div class="popover-grid">
+					{#each moreKeys as item}
+						<Button variant="secondary" size="toolbar" class="min-w-14 min-h-12" onclick={() => { sendKeys(item.keys); moreOpen = false; }}>
+							<iconify-icon icon={item.icon}></iconify-icon>
+							<span>{item.label}</span>
+						</Button>
+					{/each}
+				</div>
+			</Popover.Content>
+		</Popover.Root>
+
+		<!-- Commands popover -->
+		<Popover.Root bind:open={commandsOpen}>
+			<Popover.Trigger class="flex-1 flex-col gap-0.5 px-2 py-1.5 min-w-11 h-auto text-[9px] uppercase tracking-wide inline-flex shrink-0 items-center justify-center rounded-md font-medium cursor-pointer bg-[#222] text-stone-100 hover:bg-[#333]">
+				<iconify-icon icon="mdi:lightning-bolt" style="font-size: 18px;"></iconify-icon>
+				<span>Cmds</span>
+			</Popover.Trigger>
+			<Popover.Content side="top" class="w-auto max-w-[320px] p-2 bg-[#1a1a1a] border-[#333]">
+				<div class="popover-cmds">
+					{#each commands as cmd}
+						{#if cmd.label === 'Ctrl-L'}
+							<Button variant="secondary" class="justify-start gap-2 w-full h-10 text-sm" onclick={() => { sendKeys('C-l'); commandsOpen = false; }}>
+								<iconify-icon icon={cmd.icon}></iconify-icon>
+								{cmd.label}
+							</Button>
+						{:else}
+							<Button variant="secondary" class="justify-start gap-2 w-full h-10 text-sm" onclick={() => fillInput(cmd.text)}>
+								<iconify-icon icon={cmd.icon}></iconify-icon>
+								{cmd.label}
+							</Button>
+						{/if}
+					{/each}
+				</div>
+			</Popover.Content>
+		</Popover.Root>
+
 		<Button variant="secondary" size="toolbar" class="flex-1" onclick={() => sendKeys('Escape')}>
 			<iconify-icon icon="mdi:stop"></iconify-icon>
 			<span>Esc</span>
@@ -491,6 +551,21 @@
 		word-wrap: break-word;
 		box-sizing: border-box;
 		scrollbar-width: none;
+	}
+
+	.popover-grid {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: 6px;
+	}
+
+	.popover-cmds {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		max-height: 60vh;
+		overflow-y: auto;
+		-webkit-overflow-scrolling: touch;
 	}
 
 	.input-row textarea::-webkit-scrollbar {
