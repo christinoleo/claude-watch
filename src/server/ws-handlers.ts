@@ -179,7 +179,7 @@ export function getEnrichedSessions(): (Session & { pane_title: string | null })
 
 export function capturePaneOutput(target: string): string | null {
 	try {
-		return execFileSync('tmux', ['capture-pane', '-t', target, '-p', '-S', '-100'], {
+		return execFileSync('tmux', ['capture-pane', '-t', target, '-p', '-S', '-150'], {
 			encoding: 'utf-8',
 			stdio: ['pipe', 'pipe', 'pipe'],
 			timeout: 2000
