@@ -222,7 +222,7 @@ export function parseTerminalOutput(output: string): ParsedBlock[] {
 }
 
 /**
- * Get statistics about parsed blocks
+ * Get statistics about parsed blocks (single pass)
  */
 export function getBlockStats(blocks: ParsedBlock[]): {
 	userPrompts: number;
@@ -230,10 +230,158 @@ export function getBlockStats(blocks: ParsedBlock[]): {
 	toolCalls: number;
 	hasActiveSpinner: boolean;
 } {
-	return {
-		userPrompts: blocks.filter((b) => b.type === 'user-prompt').length,
-		claudeResponses: blocks.filter((b) => b.type === 'claude-response').length,
-		toolCalls: blocks.filter((b) => b.type === 'tool-call').length,
-		hasActiveSpinner: blocks.some((b) => b.type === 'spinner')
-	};
+	let userPrompts = 0;
+	let claudeResponses = 0;
+	let toolCalls = 0;
+	let hasActiveSpinner = false;
+	for (const b of blocks) {
+		switch (b.type) {
+			case 'user-prompt': userPrompts++; break;
+			case 'claude-response': claudeResponses++; break;
+			case 'tool-call': toolCalls++; break;
+			case 'spinner': hasActiveSpinner = true; break;
+		}
+	}
+	return { userPrompts, claudeResponses, toolCalls, hasActiveSpinner };
+}
+
+/**
+ * State for incremental parsing — holds previous parse results to enable diffing.
+ */
+export interface IncrementalParseState {
+	/** Non-empty lines from the previous output */
+	lines: string[];
+	/** Parsed blocks from the previous output */
+	blocks: ParsedBlock[];
+	/** Block ID counter for stable IDs */
+	nextId: number;
+}
+
+export function createIncrementalParseState(): IncrementalParseState {
+	return { lines: [], blocks: [], nextId: 0 };
+}
+
+/**
+ * Incrementally parse terminal output by diffing against the previous state.
+ * Only re-parses lines that changed, reusing block objects for unchanged prefixes.
+ * Returns a new blocks array (with preserved object references for unchanged blocks).
+ */
+export function parseTerminalIncremental(
+	output: string,
+	state: IncrementalParseState
+): ParsedBlock[] {
+	if (!output || output.trim() === '') {
+		state.lines = [];
+		state.blocks = [];
+		state.nextId = 0;
+		return [];
+	}
+
+	// Extract non-empty lines (same filtering as parseTerminalOutput)
+	const newLines: string[] = [];
+	for (const line of output.split('\n')) {
+		if (line.trim() !== '') newLines.push(line);
+	}
+
+	const oldLines = state.lines;
+
+	// Find the first line that differs
+	const commonLen = Math.min(oldLines.length, newLines.length);
+	let divergeIdx = 0;
+	while (divergeIdx < commonLen && oldLines[divergeIdx] === newLines[divergeIdx]) {
+		divergeIdx++;
+	}
+
+	// If nothing changed, return the same array reference
+	if (divergeIdx === oldLines.length && divergeIdx === newLines.length) {
+		return state.blocks;
+	}
+
+	// Find how many complete blocks are fully within the unchanged prefix.
+	// We need to map line indices to block boundaries.
+	// Walk the old blocks and count lines to find the safe reuse point.
+	let reusableBlocks = 0;
+	let linesCounted = 0;
+	for (let i = 0; i < state.blocks.length; i++) {
+		const block = state.blocks[i];
+		// Count non-empty lines in this block
+		let blockLineCount = 0;
+		for (const l of block.content.split('\n')) {
+			if (l.trim() !== '') blockLineCount++;
+		}
+		if (linesCounted + blockLineCount <= divergeIdx) {
+			linesCounted += blockLineCount;
+			reusableBlocks++;
+		} else {
+			break;
+		}
+	}
+
+	// Reuse blocks that are fully within the unchanged prefix
+	const reused = state.blocks.slice(0, reusableBlocks);
+
+	// Re-parse from the divergence point onward
+	const remainingLines = newLines.slice(linesCounted);
+	let currentBlock: ParsedBlock | null = null;
+	let blockIdCounter = reused.length > 0
+		? reused[reused.length - 1].id
+		: state.nextId > 0 ? state.nextId - (state.blocks.length - reusableBlocks + 1) : 0;
+	// Simpler: just continue from the max ID in reused blocks
+	blockIdCounter = reused.length > 0 ? reused[reused.length - 1].id : 0;
+
+	// Get the previous block type for context continuity
+	const lastReusedBlock = reused.length > 0 ? reused[reused.length - 1] : null;
+
+	const newBlocks: ParsedBlock[] = [];
+
+	for (const line of remainingLines) {
+		const prevBlock = currentBlock || lastReusedBlock;
+		const previousType = prevBlock?.type ?? null;
+		const blockType = classifyLine(line, previousType);
+
+		if (shouldStartNewBlock(currentBlock || (newBlocks.length === 0 ? lastReusedBlock : currentBlock), blockType, line)) {
+			if (currentBlock && currentBlock.content.trim()) {
+				newBlocks.push(currentBlock);
+			}
+			currentBlock = {
+				id: ++blockIdCounter,
+				type: blockType,
+				content: line
+			};
+			if (blockType === 'tool-call') {
+				const toolName = extractToolName(line);
+				if (toolName) {
+					currentBlock.metadata = { toolName };
+				}
+			}
+		} else if (currentBlock) {
+			currentBlock.content += '\n' + line;
+		} else {
+			// First line continues from the last reused block context — start a new block
+			currentBlock = {
+				id: ++blockIdCounter,
+				type: blockType,
+				content: line
+			};
+			if (blockType === 'tool-call') {
+				const toolName = extractToolName(line);
+				if (toolName) {
+					currentBlock.metadata = { toolName };
+				}
+			}
+		}
+	}
+
+	if (currentBlock && currentBlock.content.trim()) {
+		newBlocks.push(currentBlock);
+	}
+
+	const result = [...reused, ...newBlocks];
+
+	// Update state for next call
+	state.lines = newLines;
+	state.blocks = result;
+	state.nextId = blockIdCounter + 1;
+
+	return result;
 }

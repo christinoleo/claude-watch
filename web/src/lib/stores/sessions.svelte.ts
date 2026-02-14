@@ -24,9 +24,36 @@ export interface Session {
 	linked_to?: string | null;
 }
 
+/** Fields that change frequently and should trigger a session object replacement */
+const VOLATILE_KEYS: (keyof Session)[] = [
+	'state', 'current_action', 'prompt_text', 'last_update',
+	'pane_title', 'chrome_active', 'linked_to'
+];
+
+/** Fast shallow comparison of two sessions on volatile fields + screenshots */
+function sessionChanged(a: Session, b: Session): boolean {
+	for (const key of VOLATILE_KEYS) {
+		if (a[key] !== b[key]) return true;
+	}
+	// Screenshots: compare by length + last timestamp (avoids deep comparison)
+	const aShots = a.screenshots;
+	const bShots = b.screenshots;
+	if ((aShots?.length ?? 0) !== (bShots?.length ?? 0)) return true;
+	if (aShots && bShots && aShots.length > 0) {
+		if (aShots[aShots.length - 1].timestamp !== bShots[bShots.length - 1].timestamp) return true;
+	}
+	return false;
+}
+
 class SessionStore extends ReliableWebSocket {
 	sessions = $state<Session[]>([]);
 	paused = $state(false);
+
+	// O(1) lookup by id and tmux_target — derived from sessions
+	sessionById: Map<string, Session> = $derived(new Map(this.sessions.map(s => [s.id, s])));
+	sessionByTarget: Map<string | null, Session> = $derived(
+		new Map(this.sessions.filter(s => s.tmux_target).map(s => [s.tmux_target, s]))
+	);
 
 	// Saved projects from localStorage
 	savedProjects = $state<string[]>([]);
@@ -44,8 +71,74 @@ class SessionStore extends ReliableWebSocket {
 		if (this.paused) return;
 		const data = JSON.parse(event.data);
 		if (data.sessions) {
-			this.sessions = data.sessions;
+			this.diffAndUpdate(data.sessions);
 		}
+	}
+
+	/**
+	 * Diff incoming sessions against current state.
+	 * Only replaces session objects that actually changed,
+	 * preserving referential equality for unchanged ones.
+	 */
+	private diffAndUpdate(incoming: Session[]): void {
+		const current = this.sessions;
+
+		// Fast path: different count means structural change
+		if (current.length !== incoming.length) {
+			this.sessions = incoming;
+			return;
+		}
+
+		// Build index of current sessions by id
+		const currentById = new Map<string, Session>();
+		for (const s of current) {
+			currentById.set(s.id, s);
+		}
+
+		// Check if order changed or any IDs differ
+		let orderChanged = false;
+		for (let i = 0; i < incoming.length; i++) {
+			if (incoming[i].id !== current[i].id) {
+				orderChanged = true;
+				break;
+			}
+		}
+
+		if (orderChanged) {
+			// IDs reordered — can still reuse unchanged objects
+			const result: Session[] = new Array(incoming.length);
+			let anyChanged = false;
+			for (let i = 0; i < incoming.length; i++) {
+				const prev = currentById.get(incoming[i].id);
+				if (prev && !sessionChanged(prev, incoming[i])) {
+					result[i] = prev; // reuse reference
+				} else {
+					result[i] = incoming[i];
+					anyChanged = true;
+				}
+			}
+			if (anyChanged || orderChanged) {
+				this.sessions = result;
+			}
+			return;
+		}
+
+		// Same order, same count — check each session
+		let anyChanged = false;
+		const result: Session[] = new Array(current.length);
+		for (let i = 0; i < current.length; i++) {
+			if (sessionChanged(current[i], incoming[i])) {
+				result[i] = incoming[i];
+				anyChanged = true;
+			} else {
+				result[i] = current[i]; // preserve reference
+			}
+		}
+
+		if (anyChanged) {
+			this.sessions = result;
+		}
+		// If nothing changed, don't touch this.sessions at all
 	}
 
 	connect(): void {

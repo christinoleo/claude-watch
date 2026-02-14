@@ -51,6 +51,9 @@ class BeadsStore extends ReliableWebSocket {
 	loading = $state(false);
 	error = $state<string | null>(null);
 
+	/** O(1) lookup by issue ID — shared across all derivations */
+	issueMap: Map<string, BeadsIssue> = $derived(new Map(this.issues.map((i) => [i.id, i])));
+
 	/** View-filtered issues (active = not closed/deferred, all = everything) */
 	viewFilteredIssues: BeadsIssue[] = $derived(
 		this.filter === 'active'
@@ -58,39 +61,49 @@ class BeadsStore extends ReliableWebSocket {
 			: this.issues
 	);
 
+	/** Filtered epics only — separate derived so non-epic changes don't trigger epic recomputation */
+	private filteredEpics: BeadsIssue[] = $derived(
+		this.viewFilteredIssues.filter((i) => i.issue_type === 'epic')
+	);
+
 	/** Epic groups with computed stats */
 	epicGroups: EpicGroup[] = $derived.by(() => {
-		const filtered = this.viewFilteredIssues;
-		const allIssues = this.issues;
-		const issueMap = new Map(allIssues.map((i) => [i.id, i]));
-
-		const epics = filtered.filter((i) => i.issue_type === 'epic');
+		const epics = this.filteredEpics;
+		const allIssueMap = this.issueMap;
+		const currentFilter = this.filter;
 
 		const groups: EpicGroup[] = epics.map((epic) => {
 			const childIds = epic.epic_children ?? [];
 			// Resolve children from ALL issues (for completedCount) then filter for display
-			const allChildren = childIds.map((id) => issueMap.get(id)).filter((i): i is BeadsIssue => !!i);
-			const completedCount = allChildren.filter((c) => c.status === 'closed').length;
-			const totalCount = allChildren.length;
+			const allChildren = childIds.map((id) => allIssueMap.get(id)).filter((i): i is BeadsIssue => !!i);
 
-			// Display tasks: apply the current view filter
-			const displayTasks =
-				this.filter === 'active'
-					? allChildren.filter((c) => c.status !== 'closed' && c.status !== 'deferred')
-					: allChildren;
+			// Single pass: compute counts and build display tasks simultaneously
+			let completedCount = 0;
+			let activeCount = 0;
+			let blockedCount = 0;
+			const displayTasks: BeadsIssue[] = [];
 
-			const activeCount = displayTasks.filter(
-				(t) => t.status === 'in_progress' || (t.status === 'open' && hasNoActiveNeeds(t))
-			).length;
-			const blockedCount = displayTasks.filter(
-				(t) => t.status === 'open' && !hasNoActiveNeeds(t)
-			).length;
+			for (const child of allChildren) {
+				if (child.status === 'closed') {
+					completedCount++;
+					if (currentFilter !== 'active') displayTasks.push(child);
+				} else if (child.status === 'deferred') {
+					if (currentFilter !== 'active') displayTasks.push(child);
+				} else {
+					displayTasks.push(child);
+					if (child.status === 'in_progress' || (child.status === 'open' && hasNoActiveNeeds(child))) {
+						activeCount++;
+					} else if (child.status === 'open') {
+						blockedCount++;
+					}
+				}
+			}
 
 			return {
 				epic,
 				tasks: sortTasks(displayTasks),
 				completedCount,
-				totalCount,
+				totalCount: allChildren.length,
 				activeCount,
 				blockedCount
 			};
@@ -108,17 +121,24 @@ class BeadsStore extends ReliableWebSocket {
 		return groups;
 	});
 
-	/** Non-epic issues without a parent epic */
-	orphanTasks: BeadsIssue[] = $derived(
-		sortTasks(
-			this.viewFilteredIssues.filter((i) => i.issue_type !== 'epic' && !i.parent_epic_id)
-		)
-	);
+	/** Non-epic issues without a parent epic + issue count (single pass) */
+	private orphanAndCount = $derived.by(() => {
+		const filtered = this.viewFilteredIssues;
+		const orphans: BeadsIssue[] = [];
+		let nonEpicCount = 0;
+		for (const i of filtered) {
+			if (i.issue_type !== 'epic') {
+				nonEpicCount++;
+				if (!i.parent_epic_id) orphans.push(i);
+			}
+		}
+		return { orphans, nonEpicCount };
+	});
+
+	orphanTasks: BeadsIssue[] = $derived(sortTasks(this.orphanAndCount.orphans));
 
 	/** Count of non-epic filtered issues (for badge) */
-	issueCount: number = $derived(
-		this.viewFilteredIssues.filter((i) => i.issue_type !== 'epic').length
-	);
+	issueCount: number = $derived(this.orphanAndCount.nonEpicCount);
 
 	protected getWsUrl(): string {
 		const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';

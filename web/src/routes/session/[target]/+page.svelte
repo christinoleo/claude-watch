@@ -13,9 +13,10 @@
 
 	const target = $derived($page.params.target ? decodeURIComponent($page.params.target) : null);
 
-	// Find session state from session store
+	// Find session state from session store (O(1) Map lookup)
 	const currentSession = $derived(
-		sessionStore.sessions.find((s) => s.tmux_target === target || s.id === target)
+		(target ? sessionStore.sessionByTarget.get(target) : undefined) ??
+		(target ? sessionStore.sessionById.get(target) : undefined)
 	);
 
 	let textInput = $state('');
