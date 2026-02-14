@@ -65,6 +65,7 @@ interface Session {
 interface HookInput {
   session_id: string;
   cwd: string;
+  hook_event_name?: string;
   tool_name?: string;
   tool_input?: {
     command?: string;
@@ -72,6 +73,29 @@ interface HookInput {
     filePath?: string;
     description?: string;
   };
+}
+
+/**
+ * Map Claude Code 2.1 PascalCase hook_event_name to our kebab-case event names.
+ * Falls back to undefined for unknown/Notification events (handled by argv).
+ */
+function mapEventName(hookEventName?: string): string | undefined {
+  if (!hookEventName) return undefined;
+
+  const map: Record<string, string> = {
+    SessionStart: "session-start",
+    UserPromptSubmit: "user-prompt-submit",
+    Stop: "stop",
+    PermissionRequest: "permission-request",
+    PreToolUse: "pre-tool-use",
+    PostToolUse: "post-tool-use",
+    PostToolUseFailure: "post-tool-use-failure",
+    SessionEnd: "session-end",
+    // Notification events can't be distinguished by hook_event_name alone
+    // (all are "Notification"), so they fall through to argv
+  };
+
+  return map[hookEventName];
 }
 
 function ensureSessionsDir(): void {
@@ -436,18 +460,20 @@ function handleSessionEnd(input: HookInput): void {
 }
 
 async function main(): Promise<void> {
-  const event = process.argv[2];
-
-  debugLog(`main: event=${event}`);
-
-  if (!event) {
-    console.error("Usage: claude-mux-hook <event>");
-    process.exit(1);
-  }
-
   try {
     const input = await readStdin();
+
+    // Claude Code 2.1+ passes event type in stdin JSON; fall back to argv for
+    // backward compat and for Notification subtypes (all share hook_event_name="Notification")
+    const event = mapEventName(input.hook_event_name) ?? process.argv[2];
+
+    debugLog(`main: event=${event} (hook_event_name=${input.hook_event_name}, argv=${process.argv[2]})`);
     debugLog(`main: session_id=${input.session_id}, cwd=${input.cwd}`);
+
+    if (!event) {
+      debugLog(`main: no event resolved, exiting`);
+      process.exit(1);
+    }
 
     switch (event) {
       case "session-start":

@@ -13,7 +13,9 @@ import { isPidAlive } from "../utils/pid.js";
 import {
   checkHooksStatus,
   getInstalledHooksVersion,
+  getHookScriptPath,
   installHooks,
+  loadClaudeSettings,
   saveClaudeSettings,
 } from "../setup/hooks.js";
 
@@ -124,28 +126,41 @@ export async function runTui(options: TuiOptions): Promise<void> {
   const hooksStatus = checkHooksStatus();
   if (hooksStatus !== "current") {
     const installedVersion = getInstalledHooksVersion();
-    const action = hooksStatus === "install" ? "installed" : "updated";
-    const currentInfo = installedVersion ? `installed: ${installedVersion}` : "not installed";
+    const settings = loadClaudeSettings();
+    const installedPath = settings["claude-watch"]?.hookPath;
+    const currentPath = getHookScriptPath("claude-mux-hook.js");
+    const pathChanged = installedPath && installedPath !== currentPath;
 
-    console.log(`claude-mux hooks need to be ${action} (${currentInfo}, required: ${VERSION})`);
-    console.log("");
-
-    const answer = await promptUser(`${hooksStatus === "install" ? "Install" : "Update"} hooks now? [Y/n/q]: `);
-    const normalized = answer.toLowerCase().trim();
-
-    if (normalized === "q") {
-      console.log("Exiting.");
-      process.exit(0);
-    } else if (normalized === "n") {
-      console.log("Skipping hook installation. Some features may not work correctly.");
-      console.log("");
-    } else {
-      // Default to Yes
-      console.log("Installing hooks...");
+    // Auto-reinstall silently when only the path changed (dev/prod switch)
+    if (pathChanged && installedVersion === VERSION) {
+      console.log(`Switching hooks to: ${currentPath}`);
       const { newSettings } = installHooks();
       saveClaudeSettings(newSettings);
-      console.log("Hooks installed successfully.");
       console.log("");
+    } else {
+      const action = hooksStatus === "install" ? "installed" : "updated";
+      const currentInfo = installedVersion ? `installed: ${installedVersion}` : "not installed";
+
+      console.log(`claude-mux hooks need to be ${action} (${currentInfo}, required: ${VERSION})`);
+      console.log("");
+
+      const answer = await promptUser(`${hooksStatus === "install" ? "Install" : "Update"} hooks now? [Y/n/q]: `);
+      const normalized = answer.toLowerCase().trim();
+
+      if (normalized === "q") {
+        console.log("Exiting.");
+        process.exit(0);
+      } else if (normalized === "n") {
+        console.log("Skipping hook installation. Some features may not work correctly.");
+        console.log("");
+      } else {
+        // Default to Yes
+        console.log("Installing hooks...");
+        const { newSettings } = installHooks();
+        saveClaudeSettings(newSettings);
+        console.log("Hooks installed successfully.");
+        console.log("");
+      }
     }
   }
 
