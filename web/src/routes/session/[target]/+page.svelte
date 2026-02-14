@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 	import { onDestroy } from 'svelte';
+	import type { ParsedBlock } from '$lib/types/terminal';
 	import { terminalStore } from '$lib/stores/terminal.svelte';
 	import { sessionStore, stateColor } from '$lib/stores/sessions.svelte';
 	import { preferences } from '$lib/stores/preferences.svelte';
@@ -25,7 +26,38 @@
 	let textareaElement: HTMLTextAreaElement | null = $state(null);
 	let userScrolledUp = $state(false);
 	let showCopied = $state(false);
+	let showSelectionCopied = $state(false);
+	let selectedText = $state('');
 	let measureCanvas: HTMLCanvasElement | null = null;
+
+	// Freeze terminal rendering while user has text selected (iOS dismisses
+	// the copy callout on any DOM mutation under the selection)
+	let hasSelection = $state(false);
+	let frozenBlocks: ParsedBlock[] = $state([]);
+	let frozenOutput = $state('');
+
+	$effect(() => {
+		if (!browser) return;
+		const handler = () => {
+			const sel = window.getSelection();
+			const text = sel?.toString() || '';
+			const selActive = !!(text.length > 0 && outputElement?.contains(sel?.anchorNode ?? null));
+			if (selActive) {
+				selectedText = text;
+				if (!hasSelection) {
+					// Snapshot current state when selection starts
+					frozenBlocks = [...terminalStore.parsedBlocks];
+					frozenOutput = terminalStore.output;
+				}
+			}
+			hasSelection = selActive;
+		};
+		document.addEventListener('selectionchange', handler);
+		return () => document.removeEventListener('selectionchange', handler);
+	});
+
+	const displayBlocks = $derived(hasSelection ? frozenBlocks : terminalStore.parsedBlocks);
+	const displayOutput = $derived(hasSelection ? frozenOutput : terminalStore.output);
 
 	// Measure monospace character dimensions using canvas
 	function measureFont(): { width: number; height: number } {
@@ -102,9 +134,9 @@
 		userScrolledUp = scrollHeight - scrollTop - clientHeight > 50;
 	}
 
-	// Auto-scroll to bottom only if user hasn't scrolled up
+	// Auto-scroll to bottom only if user hasn't scrolled up and no active selection
 	$effect(() => {
-		if (outputElement && terminalStore.output && !userScrolledUp) {
+		if (outputElement && terminalStore.output && !userScrolledUp && !hasSelection) {
 			outputElement.scrollTop = outputElement.scrollHeight;
 		}
 	});
@@ -159,6 +191,25 @@
 		});
 		showConfirmKill = false;
 		goto('/');
+	}
+
+	function copySelection() {
+		const text = selectedText;
+		if (!text) return;
+		// Use textarea + execCommand as primary method (works on iOS/Brave without HTTPS)
+		const textarea = document.createElement('textarea');
+		textarea.value = text;
+		textarea.setAttribute('readonly', '');
+		textarea.style.position = 'fixed';
+		textarea.style.left = '-9999px';
+		textarea.style.opacity = '0';
+		document.body.appendChild(textarea);
+		textarea.select();
+		textarea.setSelectionRange(0, text.length); // iOS needs this
+		document.execCommand('copy');
+		document.body.removeChild(textarea);
+		showSelectionCopied = true;
+		setTimeout(() => { showSelectionCopied = false; }, 2000);
 	}
 
 	function copyTmuxCmd() {
@@ -227,13 +278,19 @@
 
 	<div class="output" bind:this={outputElement} onscroll={handleScroll}>
 		{#if preferences.terminalTheming}
-			<TerminalRenderer blocks={terminalStore.parsedBlocks} />
+			<TerminalRenderer blocks={displayBlocks} />
 		{:else}
-			<pre class="raw-output">{terminalStore.output}</pre>
+			<pre class="raw-output">{displayOutput}</pre>
 		{/if}
 	</div>
 
 	<div class="toolbar">
+		{#if hasSelection}
+			<Button variant="success" size="toolbar" class="flex-1" onclick={copySelection}>
+				<iconify-icon icon={showSelectionCopied ? "mdi:check" : "mdi:content-copy"}></iconify-icon>
+				<span>{showSelectionCopied ? 'Copied!' : 'Copy'}</span>
+			</Button>
+		{/if}
 		<Button variant="secondary" size="toolbar" class="flex-1" onclick={() => sendKeys('Up')}>
 			<iconify-icon icon="mdi:arrow-up"></iconify-icon>
 			<span>Up</span>
