@@ -3,7 +3,6 @@
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 	import { onDestroy } from 'svelte';
-	import type { ParsedBlock } from '$lib/types/terminal';
 	import { terminalStore } from '$lib/stores/terminal.svelte';
 	import { sessionStore, stateColor } from '$lib/stores/sessions.svelte';
 	import { preferences } from '$lib/stores/preferences.svelte';
@@ -74,7 +73,6 @@
 	// Freeze terminal rendering while user has text selected (iOS dismisses
 	// the copy callout on any DOM mutation under the selection)
 	let hasSelection = $state(false);
-	let frozenBlocks: ParsedBlock[] = $state([]);
 	let frozenOutput = $state('');
 
 	$effect(() => {
@@ -86,8 +84,7 @@
 			if (selActive) {
 				selectedText = text;
 				if (!hasSelection) {
-					// Snapshot current state when selection starts
-					frozenBlocks = [...terminalStore.parsedBlocks];
+					// Snapshot current output when selection starts
 					frozenOutput = terminalStore.output;
 				}
 			}
@@ -97,7 +94,6 @@
 		return () => document.removeEventListener('selectionchange', handler);
 	});
 
-	const displayBlocks = $derived(hasSelection ? frozenBlocks : terminalStore.parsedBlocks);
 	const displayOutput = $derived(hasSelection ? frozenOutput : terminalStore.output);
 
 	// Measure monospace character dimensions using canvas
@@ -319,7 +315,7 @@
 
 	<div class="output" bind:this={outputElement} onscroll={handleScroll}>
 		{#if preferences.terminalTheming}
-			<TerminalRenderer blocks={displayBlocks} />
+			<TerminalRenderer output={displayOutput} />
 		{:else}
 			<pre class="raw-output">{displayOutput}</pre>
 		{/if}

@@ -19,7 +19,7 @@ export function createCaptureCommand(): Command {
       }
 
       try {
-        const args = ["capture-pane", "-t", tmuxTarget, "-p"];
+        const args = ["capture-pane", "-t", tmuxTarget, "-p", "-e"];
         if (options.lines) {
           args.push("-S", `-${options.lines}`);
         }

@@ -1,104 +1,23 @@
 <script lang="ts">
-	import type { ParsedBlock } from '$lib/types/terminal';
+	import { AnsiUp } from 'ansi_up';
 
 	interface Props {
-		blocks: ParsedBlock[];
+		output: string;
 		class?: string;
 	}
 
-	const { blocks, class: className = '' }: Props = $props();
+	const { output, class: className = '' }: Props = $props();
 
-	// Type-specific styling classes
-	const typeStyles: Record<string, string> = {
-		'user-prompt': 'terminal-user-prompt',
-		'claude-response': 'terminal-claude-response',
-		'tool-call': 'terminal-tool-call',
-		'tool-result': 'terminal-tool-result',
-		separator: 'terminal-separator',
-		status: 'terminal-status',
-		spinner: 'terminal-spinner',
-		plain: 'terminal-plain'
-	};
+	const ansi = new AnsiUp();
+	ansi.use_classes = true;
 
-	// Tool-specific colors
-	const toolColors: Record<string, string> = {
-		// File operations
-		'Read': 'tool-read',
-		'Write': 'tool-write',
-		'Edit': 'tool-edit',
-		'Update': 'tool-edit',
-		'NotebookEdit': 'tool-edit',
-		'Glob': 'tool-search',
-		'Grep': 'tool-search',
-		'Search': 'tool-search',
-		// Execution
-		'Bash': 'tool-bash',
-		'Task': 'tool-task',
-		// Web operations
-		'WebFetch': 'tool-web',
-		'WebSearch': 'tool-web',
-		// Todo
-		'TodoWrite': 'tool-todo',
-		// Browser/MCP
-		'chrome-devtools': 'tool-browser',
-		'mcp': 'tool-browser',
-	};
-
-	function getToolClass(toolName: string | undefined): string {
-		if (!toolName) return 'tool-default';
-		// Check exact match first
-		if (toolColors[toolName]) return toolColors[toolName];
-		// Check if tool name contains a known prefix
-		for (const [key, value] of Object.entries(toolColors)) {
-			if (toolName.toLowerCase().includes(key.toLowerCase())) return value;
-		}
-		return 'tool-default';
-	}
-
-	// Process content for diff highlighting
-	function processDiffContent(content: string): string {
-		return content
-			.split('\n')
-			.map(line => {
-				// Diff lines: number followed by + or -
-				if (/^\s*\d+\s*\+/.test(line)) {
-					return `<span class="diff-add">${escapeHtml(line)}</span>`;
-				}
-				if (/^\s*\d+\s*-/.test(line)) {
-					return `<span class="diff-remove">${escapeHtml(line)}</span>`;
-				}
-				return escapeHtml(line);
-			})
-			.join('\n');
-	}
-
-	function escapeHtml(text: string): string {
-		return text
-			.replace(/&/g, '&amp;')
-			.replace(/</g, '&lt;')
-			.replace(/>/g, '&gt;')
-			.replace(/"/g, '&quot;')
-			.replace(/'/g, '&#39;');
-	}
+	const html = $derived(ansi.ansi_to_html(output));
 </script>
 
-<pre class="terminal-renderer {className}">{#each blocks as block (block.id)}<span class="terminal-block {typeStyles[block.type] || 'terminal-plain'} {block.type === 'tool-call' ? getToolClass(block.metadata?.toolName) : ''}">{#if block.type === 'tool-call' && block.metadata?.toolName}<span class="tool-badge {getToolClass(block.metadata.toolName)}">{block.metadata.toolName}</span>{/if}{#if block.type === 'tool-result'}{@html processDiffContent(block.content)}{:else}{block.content}{/if}</span>
-{/each}</pre>
+<pre class="terminal-renderer {className}">{@html html}</pre>
 
 <style>
-	/* Tool color definitions - single source of truth */
 	.terminal-renderer {
-		--tool-read: #60a5fa;      /* blue */
-		--tool-write: #c084fc;     /* purple */
-		--tool-edit: #fbbf24;      /* amber/yellow */
-		--tool-search: #f472b6;    /* pink */
-		--tool-bash: #22d3ee;      /* cyan */
-		--tool-task: #a78bfa;      /* violet */
-		--tool-web: #fb923c;       /* orange-400 */
-		--tool-todo: #a3e635;      /* lime-400 */
-		--tool-browser: #f97316;   /* orange-500 */
-		--tool-default: #4ade80;   /* green */
-
 		margin: 0;
 		font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
 		font-size: 13px;
@@ -109,81 +28,37 @@
 		color: #fff;
 	}
 
-	/* User prompt: blue */
-	.terminal-user-prompt {
-		color: var(--tool-read);
-		font-weight: 500;
-	}
+	/* ansi_up class-based colors */
+	.terminal-renderer :global(.ansi-black-fg) { color: #555; }
+	.terminal-renderer :global(.ansi-red-fg) { color: #f87171; }
+	.terminal-renderer :global(.ansi-green-fg) { color: #4ade80; }
+	.terminal-renderer :global(.ansi-yellow-fg) { color: #fbbf24; }
+	.terminal-renderer :global(.ansi-blue-fg) { color: #60a5fa; }
+	.terminal-renderer :global(.ansi-magenta-fg) { color: #c084fc; }
+	.terminal-renderer :global(.ansi-cyan-fg) { color: #22d3ee; }
+	.terminal-renderer :global(.ansi-white-fg) { color: #e5e7eb; }
 
-	/* Claude response: white (normal conversation) */
-	.terminal-claude-response {
-		color: #fff;
-	}
+	.terminal-renderer :global(.ansi-bright-black-fg) { color: #6b7280; }
+	.terminal-renderer :global(.ansi-bright-red-fg) { color: #fca5a5; }
+	.terminal-renderer :global(.ansi-bright-green-fg) { color: #86efac; }
+	.terminal-renderer :global(.ansi-bright-yellow-fg) { color: #fde68a; }
+	.terminal-renderer :global(.ansi-bright-blue-fg) { color: #93c5fd; }
+	.terminal-renderer :global(.ansi-bright-magenta-fg) { color: #d8b4fe; }
+	.terminal-renderer :global(.ansi-bright-cyan-fg) { color: #67e8f9; }
+	.terminal-renderer :global(.ansi-bright-white-fg) { color: #fff; }
 
-	/* Tool call: default green */
-	.terminal-tool-call {
-		color: var(--tool-default);
-	}
+	.terminal-renderer :global(.ansi-black-bg) { background-color: #000; }
+	.terminal-renderer :global(.ansi-red-bg) { background-color: #b91c1c; }
+	.terminal-renderer :global(.ansi-green-bg) { background-color: #15803d; }
+	.terminal-renderer :global(.ansi-yellow-bg) { background-color: #a16207; }
+	.terminal-renderer :global(.ansi-blue-bg) { background-color: #1d4ed8; }
+	.terminal-renderer :global(.ansi-magenta-bg) { background-color: #7e22ce; }
+	.terminal-renderer :global(.ansi-cyan-bg) { background-color: #0e7490; }
+	.terminal-renderer :global(.ansi-white-bg) { background-color: #e5e7eb; }
 
-	.tool-badge {
-		font-size: 11px;
-		font-weight: 600;
-		color: #000;
-		padding: 0 4px;
-		border-radius: 3px;
-		margin-right: 4px;
-		background: var(--tool-default);
-	}
-
-	/* Tool-specific colors - badge backgrounds and text use same variable */
-	.tool-badge.tool-read { background: var(--tool-read); }
-	.tool-badge.tool-write { background: var(--tool-write); }
-	.tool-badge.tool-edit { background: var(--tool-edit); }
-	.tool-badge.tool-search { background: var(--tool-search); }
-	.tool-badge.tool-bash { background: var(--tool-bash); }
-	.tool-badge.tool-task { background: var(--tool-task); }
-	.tool-badge.tool-web { background: var(--tool-web); }
-	.tool-badge.tool-todo { background: var(--tool-todo); }
-	.tool-badge.tool-browser { background: var(--tool-browser); }
-	.tool-badge.tool-default { background: var(--tool-default); }
-
-	.terminal-tool-call.tool-read { color: var(--tool-read); }
-	.terminal-tool-call.tool-write { color: var(--tool-write); }
-	.terminal-tool-call.tool-edit { color: var(--tool-edit); }
-	.terminal-tool-call.tool-search { color: var(--tool-search); }
-	.terminal-tool-call.tool-bash { color: var(--tool-bash); }
-	.terminal-tool-call.tool-task { color: var(--tool-task); }
-	.terminal-tool-call.tool-web { color: var(--tool-web); }
-	.terminal-tool-call.tool-todo { color: var(--tool-todo); }
-	.terminal-tool-call.tool-browser { color: var(--tool-browser); }
-	.terminal-tool-call.tool-default { color: var(--tool-default); }
-
-	/* Diff highlighting */
-	.diff-add { color: #4ade80; } /* green for additions */
-	.diff-remove { color: #f87171; } /* red for removals */
-
-	/* Tool result: gray */
-	.terminal-tool-result {
-		color: #d1d5db; /* gray-300 */
-	}
-
-	/* Separator: dimmed */
-	.terminal-separator {
-		color: #4b5563; /* gray-600 */
-	}
-
-	/* Status: dimmed */
-	.terminal-status {
-		color: #6b7280; /* gray-500 */
-	}
-
-	/* Spinner: cyan */
-	.terminal-spinner {
-		color: #22d3ee; /* cyan-400 */
-	}
-
-	/* Plain: default gray-200 */
-	.terminal-plain {
-		color: #e5e7eb; /* gray-200 */
-	}
+	.terminal-renderer :global(.ansi-bold) { font-weight: 700; }
+	.terminal-renderer :global(.ansi-dim) { opacity: 0.7; }
+	.terminal-renderer :global(.ansi-italic) { font-style: italic; }
+	.terminal-renderer :global(.ansi-underline) { text-decoration: underline; }
+	.terminal-renderer :global(.ansi-strikethrough) { text-decoration: line-through; }
 </style>

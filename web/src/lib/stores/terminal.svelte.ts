@@ -1,21 +1,8 @@
 import { browser } from '$app/environment';
 import { ReliableWebSocket } from './websocket-base.svelte';
-import {
-	parseTerminalIncremental,
-	createIncrementalParseState,
-	getBlockStats
-} from '$lib/utils/terminal-parser';
-import type { ParsedBlock } from '$lib/types/terminal';
 
 class TerminalStore extends ReliableWebSocket {
 	output = $state('');
-	parsedBlocks: ParsedBlock[] = $state([]);
-
-	// Derived stats for UI indicators
-	stats = $derived(getBlockStats(this.parsedBlocks));
-
-	// Incremental parsing state (not reactive — internal bookkeeping)
-	private parseState = createIncrementalParseState();
 
 	private target: string | null = null;
 	private resizeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -39,7 +26,6 @@ class TerminalStore extends ReliableWebSocket {
 		const data = JSON.parse(event.data);
 		if (data.output !== undefined) {
 			this.output = data.output;
-			this.parsedBlocks = parseTerminalIncremental(data.output, this.parseState);
 		}
 	}
 
@@ -58,11 +44,9 @@ class TerminalStore extends ReliableWebSocket {
 			this.target = oldTarget;
 		}
 
-		// Clear output and reset parse state when switching to a different target
+		// Clear output when switching to a different target
 		if (this.target !== target) {
 			this.output = '';
-			this.parsedBlocks = [];
-			this.parseState = createIncrementalParseState();
 		}
 
 		this.target = target;
