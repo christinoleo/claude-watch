@@ -12,11 +12,15 @@
 
 	let { project, onSelect }: Props = $props();
 
-	let expanded = $state(true);
+	let expanded = $state(false);
 
-	// Update beads store when project changes
+	// Only connect to beads when panel is expanded
 	$effect(() => {
-		beadsStore.setProject(project);
+		if (expanded) {
+			beadsStore.setProject(project);
+		} else {
+			beadsStore.setProject(null);
+		}
 	});
 
 	function toggleExpanded() {
