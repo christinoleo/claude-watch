@@ -55,10 +55,13 @@
 	function fillInput(text: string) {
 		textInput = textInput ? textInput + ' ' + text : text;
 		commandsOpen = false;
-		if (textareaElement) {
-			textareaElement.focus();
-			setTimeout(autoResize, 0);
-		}
+		// Delay focus until after popover closes so it isn't stolen
+		setTimeout(() => {
+			if (textareaElement) {
+				textareaElement.focus();
+				autoResize();
+			}
+		}, 100);
 	}
 	let outputElement: HTMLDivElement | null = $state(null);
 	let textareaElement: HTMLTextAreaElement | null = $state(null);
