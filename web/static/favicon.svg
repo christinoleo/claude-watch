@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Back terminal window -->
+  <rect x="6" y="4" width="20" height="16" rx="2.5" fill="#2a2a3e" stroke="#7c6fbd" stroke-width="1.2"/>
+  <!-- Back title bar -->
+  <rect x="6" y="4" width="20" height="4" rx="2.5" fill="#7c6fbd" opacity="0.3"/>
+  <circle cx="9" cy="6" r="0.8" fill="#7c6fbd" opacity="0.6"/>
+
+  <!-- Front terminal window -->
+  <rect x="8" y="10" width="20" height="16" rx="2.5" fill="#1a1a2e" stroke="#e2a052" stroke-width="1.2"/>
+  <!-- Front title bar -->
+  <rect x="8" y="10" width="20" height="4" rx="2.5" fill="#e2a052" opacity="0.2"/>
+  <circle cx="11" cy="12" r="0.8" fill="#e2a052" opacity="0.6"/>
+
+  <!-- Prompt chevron -->
+  <path d="M12 19 L15 21 L12 23" fill="none" stroke="#e2a052" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Cursor blink -->
+  <rect x="17" y="19.5" width="5" height="3" rx="0.5" fill="#e2a052" opacity="0.7"/>
+
+  <!-- Activity dot -->
+  <circle cx="26" cy="6" r="2.5" fill="#4ade80"/>
+</svg>
