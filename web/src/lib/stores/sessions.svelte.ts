@@ -19,6 +19,7 @@ export interface Session {
 	prompt_text: string | null;
 	last_update: number;
 	pane_title?: string | null;
+	pane_alive?: boolean;
 	screenshots?: Screenshot[];
 	chrome_active?: boolean;
 	linked_to?: string | null;
@@ -27,7 +28,7 @@ export interface Session {
 /** Fields that change frequently and should trigger a session object replacement */
 const VOLATILE_KEYS: (keyof Session)[] = [
 	'state', 'current_action', 'prompt_text', 'last_update',
-	'pane_title', 'chrome_active', 'linked_to'
+	'pane_title', 'pane_alive', 'chrome_active', 'linked_to'
 ];
 
 /** Fast shallow comparison of two sessions on volatile fields + screenshots */

@@ -12,7 +12,7 @@ import { execFileSync, execFile } from 'child_process';
 import { promisify } from 'util';
 
 const execFileAsync = promisify(execFile);
-import { getAllSessions, updateSession, readLinks, type Session } from '../db/index.js';
+import { getAllSessions, updateSession, readLinks, cleanupStaleSessions, type Session } from '../db/index.js';
 import { checkForInterruption, getPaneTitle } from '../tmux/pane.js';
 import { resizeTmuxWindow } from '../tmux/resize.js';
 import { sessionWatcher } from './watcher.js';
@@ -97,7 +97,7 @@ export interface WsClient {
 
 export interface SessionsMessage {
 	type: 'sessions' | 'connected';
-	sessions: (Session & { pane_title: string | null })[];
+	sessions: (Session & { pane_title: string | null; pane_alive: boolean })[];
 	count: number;
 	timestamp: number;
 }
@@ -147,15 +147,17 @@ function deduplicateByTmuxTarget<T extends { tmux_target: string | null; last_up
 	return [...byTarget.values(), ...noTarget];
 }
 
-export function getEnrichedSessions(): (Session & { pane_title: string | null })[] {
+export function getEnrichedSessions(): (Session & { pane_title: string | null; pane_alive: boolean })[] {
 	syncSessionStates();
 	const sessions = getAllSessions();
 	const links = readLinks();
 
 	const enrichedSessions = sessions.map((s) => {
-		const enriched: Session & { pane_title: string | null } = {
+		const paneTitle = s.tmux_target ? getPaneTitle(s.tmux_target) : null;
+		const enriched: Session & { pane_title: string | null; pane_alive: boolean } = {
 			...s,
-			pane_title: s.tmux_target ? getPaneTitle(s.tmux_target) : null
+			pane_title: paneTitle,
+			pane_alive: s.tmux_target ? paneTitle !== null : true,
 		};
 
 		// Merge linked_to from links file (orchestratorTarget → mainTarget)
@@ -201,6 +203,7 @@ export class SessionsWsManager {
 	private clients = new Set<WsClient>();
 	private unsubscribe: (() => void) | null = null;
 	private interruptCheckTimer: ReturnType<typeof setInterval> | null = null;
+	private cleanupTimer: ReturnType<typeof setInterval> | null = null;
 	private lastHash = '';
 	private config: Required<WsConfig>;
 	private droppedClients = 0;
@@ -254,6 +257,11 @@ export class SessionsWsManager {
 				syncSessionStates();
 				this.refreshAndBroadcast();
 			}, 500);
+			// Cleanup stale sessions (dead PIDs) periodically
+			try { cleanupStaleSessions(); } catch {}
+			this.cleanupTimer = setInterval(() => {
+				try { cleanupStaleSessions(); } catch {}
+			}, 10_000);
 		} else {
 			console.log('[ws:sessions] addClient: clients=', this.clients.size, 'hasUnsubscribe=', !!this.unsubscribe);
 		}
@@ -283,6 +291,11 @@ export class SessionsWsManager {
 			if (this.interruptCheckTimer) {
 				clearInterval(this.interruptCheckTimer);
 				this.interruptCheckTimer = null;
+			}
+			// Stop cleanup timer
+			if (this.cleanupTimer) {
+				clearInterval(this.cleanupTimer);
+				this.cleanupTimer = null;
 			}
 		}
 	}

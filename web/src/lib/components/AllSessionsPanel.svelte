@@ -241,19 +241,28 @@
 {#snippet sessionCard(session: Session, isOrchestrator: boolean)}
 	{#if session.tmux_target}
 		{@const isActive = session.tmux_target === currentTarget}
+		{@const isDead = session.pane_alive === false}
 		<a
 			href="/session/{encodeURIComponent(session.tmux_target)}"
 			class="session {session.state}"
 			class:active={isActive}
 			class:orchestrator={isOrchestrator}
+			class:dead={isDead}
 			onclick={(e) => handleSessionClick(e, session.tmux_target!)}
 		>
-			<span class="state" style="background: {stateColor(session.state)}"></span>
+			{#if isDead}
+				<iconify-icon icon="mdi:close-circle" style="color: #555; font-size: 14px; flex-shrink: 0;"></iconify-icon>
+			{:else}
+				<span class="state" style="background: {stateColor(session.state)}"></span>
+			{/if}
 			<div class="session-info">
+				{#if isOrchestrator}
+					<div class="session-role">orch</div>
+				{/if}
 				<div class="target">{session.pane_title || session.tmux_target}</div>
-				<div class="action">{session.current_action || session.state}</div>
+				<div class="action">{isDead ? 'pane closed' : (session.current_action || session.state)}</div>
 			</div>
-			{#if !compact}
+			{#if !compact && !isDead}
 				<div class="actions">
 					<Button
 						variant="ghost-destructive"
@@ -826,6 +835,23 @@
 
 	.compact .session .action {
 		font-size: 11px;
+	}
+
+	/* Dead pane styling */
+	.project-sessions :global(.session.dead) {
+		opacity: 0.5;
+	}
+
+	.project-sessions :global(.session.dead .target) {
+		text-decoration: line-through;
+		color: hsl(var(--muted-foreground));
+	}
+
+	.session-role {
+		font-size: 9px;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+		color: hsl(var(--muted-foreground));
 	}
 
 </style>

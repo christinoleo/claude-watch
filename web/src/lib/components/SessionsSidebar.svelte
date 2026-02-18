@@ -110,36 +110,54 @@
 							{#if item.type === 'pair'}
 								<div class="session-pair">
 									{#if item.main.tmux_target}
+										{@const isDead = item.main.pane_alive === false}
 										<a
 											href="/session/{encodeURIComponent(item.main.tmux_target)}"
 											class="session-item"
 											class:active={item.main.tmux_target === currentTarget || item.main.id === currentTarget}
+											class:dead={isDead}
 											onclick={onSelect}
 										>
 											<span class="icon-slot">
-												<span class="state-dot" style="background: {stateColor(item.main.state)}"></span>
+												{#if isDead}
+													<iconify-icon icon="mdi:close-circle" style="color: #555; font-size: 14px;"></iconify-icon>
+												{:else}
+													<span class="state-dot" style="background: {stateColor(item.main.state)}"></span>
+												{/if}
 											</span>
 											<div class="session-info">
+												<div class="session-role">main</div>
 												<div class="session-name">{item.main.pane_title || item.main.tmux_target}</div>
-												{#if item.main.current_action}
+												{#if isDead}
+													<div class="session-action">pane closed</div>
+												{:else if item.main.current_action}
 													<div class="session-action">{item.main.current_action}</div>
 												{/if}
 											</div>
 										</a>
 									{/if}
 									{#if item.orchestrator.tmux_target}
+										{@const isDead = item.orchestrator.pane_alive === false}
 										<a
 											href="/session/{encodeURIComponent(item.orchestrator.tmux_target)}"
 											class="session-item orchestrator"
 											class:active={item.orchestrator.tmux_target === currentTarget || item.orchestrator.id === currentTarget}
+											class:dead={isDead}
 											onclick={onSelect}
 										>
 											<span class="icon-slot">
-												<span class="state-dot" style="background: {stateColor(item.orchestrator.state)}"></span>
+												{#if isDead}
+													<iconify-icon icon="mdi:close-circle" style="color: #555; font-size: 14px;"></iconify-icon>
+												{:else}
+													<span class="state-dot" style="background: {stateColor(item.orchestrator.state)}"></span>
+												{/if}
 											</span>
 											<div class="session-info">
+												<div class="session-role">orch</div>
 												<div class="session-name">{item.orchestrator.pane_title || item.orchestrator.tmux_target}</div>
-												{#if item.orchestrator.current_action}
+												{#if isDead}
+													<div class="session-action">pane closed</div>
+												{:else if item.orchestrator.current_action}
 													<div class="session-action">{item.orchestrator.current_action}</div>
 												{/if}
 											</div>
@@ -147,18 +165,26 @@
 									{/if}
 								</div>
 							{:else if item.session.tmux_target}
+								{@const isDead = item.session.pane_alive === false}
 								<a
 									href="/session/{encodeURIComponent(item.session.tmux_target)}"
 									class="session-item"
 									class:active={item.session.tmux_target === currentTarget || item.session.id === currentTarget}
+									class:dead={isDead}
 									onclick={onSelect}
 								>
 									<span class="icon-slot">
-										<span class="state-dot" style="background: {stateColor(item.session.state)}"></span>
+										{#if isDead}
+											<iconify-icon icon="mdi:close-circle" style="color: #555; font-size: 14px;"></iconify-icon>
+										{:else}
+											<span class="state-dot" style="background: {stateColor(item.session.state)}"></span>
+										{/if}
 									</span>
 									<div class="session-info">
 										<div class="session-name">{item.session.pane_title || item.session.tmux_target}</div>
-										{#if item.session.current_action}
+										{#if isDead}
+											<div class="session-action">pane closed</div>
+										{:else if item.session.current_action}
 											<div class="session-action">{item.session.current_action}</div>
 										{/if}
 									</div>
@@ -363,6 +389,22 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		margin-top: 2px;
+	}
+
+	.session-item.dead {
+		opacity: 0.5;
+	}
+
+	.session-item.dead .session-name {
+		text-decoration: line-through;
+		color: hsl(var(--muted-foreground));
+	}
+
+	.session-role {
+		font-size: 9px;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+		color: hsl(var(--muted-foreground));
 	}
 
 	.empty {

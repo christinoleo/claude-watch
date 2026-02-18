@@ -20,6 +20,8 @@
 		(target ? sessionStore.sessionById.get(target) : undefined)
 	);
 
+	const paneIsDead = $derived(currentSession?.pane_alive === false);
+
 	let textInput = $state('');
 	let showConfirmKill = $state(false);
 	let moreOpen = $state(false);
@@ -138,9 +140,13 @@
 		if (size) terminalStore.sendResize(size.cols, size.rows);
 	}
 
-	// Connect to terminal when target changes (including initial mount)
+	// Connect/disconnect terminal based on target and pane liveness
 	$effect(() => {
-		terminalStore.connect(target);
+		if (!paneIsDead) {
+			terminalStore.connect(target);
+		} else {
+			terminalStore.disconnect();
+		}
 	});
 
 	// Watch for issue IDs to inject into input
@@ -282,127 +288,142 @@
 <div class="session-container">
 	<header class="header">
 		<div class="title-row">
-			<span class="state" style="background: {stateColor(currentSession?.state || 'idle')}"></span>
+			<span class="state" style="background: {paneIsDead ? '#555' : stateColor(currentSession?.state || 'idle')}"></span>
 			<div class="title-info">
 				<span class="target">{currentSession?.pane_title || target}</span>
-				<span class="status">{currentSession?.current_action || currentSession?.state || 'idle'}</span>
+				<span class="status">{paneIsDead ? 'pane closed' : (currentSession?.current_action || currentSession?.state || 'idle')}</span>
 			</div>
 		</div>
-		<div class="header-actions">
-			<Button variant="secondary" size="toolbar" onclick={copyTmuxCmd} title="Copy tmux attach command" class={showCopied ? 'bg-green-800 text-green-300' : ''}>
-				<iconify-icon icon={showCopied ? "mdi:check" : "mdi:content-copy"}></iconify-icon>
-				<span>{showCopied ? 'Copied!' : 'Tmux'}</span>
-			</Button>
-			<Button variant="secondary" size="toolbar" onclick={handleResize} title="Resize tmux pane to fit viewport">
-				<iconify-icon icon="mdi:fit-to-screen"></iconify-icon>
-				<span>Fit</span>
-			</Button>
-			<Button
-				variant={preferences.terminalTheming ? "secondary" : "ghost"}
-				size="toolbar"
-				onclick={() => preferences.toggle('terminalTheming')}
-				title="Toggle syntax highlighting"
-			>
-				<iconify-icon icon={preferences.terminalTheming ? "mdi:palette" : "mdi:palette-outline"}></iconify-icon>
-				<span>Theme</span>
-			</Button>
-			<Button variant="ghost-destructive" size="toolbar" onclick={() => (showConfirmKill = true)} title="Kill Session">
-				<iconify-icon icon="mdi:power"></iconify-icon>
-				<span>Kill</span>
-			</Button>
-		</div>
+		{#if !paneIsDead}
+			<div class="header-actions">
+				<Button variant="secondary" size="toolbar" onclick={copyTmuxCmd} title="Copy tmux attach command" class={showCopied ? 'bg-green-800 text-green-300' : ''}>
+					<iconify-icon icon={showCopied ? "mdi:check" : "mdi:content-copy"}></iconify-icon>
+					<span>{showCopied ? 'Copied!' : 'Tmux'}</span>
+				</Button>
+				<Button variant="secondary" size="toolbar" onclick={handleResize} title="Resize tmux pane to fit viewport">
+					<iconify-icon icon="mdi:fit-to-screen"></iconify-icon>
+					<span>Fit</span>
+				</Button>
+				<Button
+					variant={preferences.terminalTheming ? "secondary" : "ghost"}
+					size="toolbar"
+					onclick={() => preferences.toggle('terminalTheming')}
+					title="Toggle syntax highlighting"
+				>
+					<iconify-icon icon={preferences.terminalTheming ? "mdi:palette" : "mdi:palette-outline"}></iconify-icon>
+					<span>Theme</span>
+				</Button>
+				<Button variant="ghost-destructive" size="toolbar" onclick={() => (showConfirmKill = true)} title="Kill Session">
+					<iconify-icon icon="mdi:power"></iconify-icon>
+					<span>Kill</span>
+				</Button>
+			</div>
+		{/if}
 	</header>
 
-	<div class="output" bind:this={outputElement} onscroll={handleScroll}>
-		{#if preferences.terminalTheming}
-			<TerminalRenderer output={displayOutput} />
-		{:else}
-			<pre class="raw-output">{displayOutput}</pre>
-		{/if}
-	</div>
-
-	<div class="toolbar">
-		{#if hasSelection}
-			<Button variant="success" size="toolbar" class="flex-1" onclick={copySelection}>
-				<iconify-icon icon={showSelectionCopied ? "mdi:check" : "mdi:content-copy"}></iconify-icon>
-				<span>{showSelectionCopied ? 'Copied!' : 'Copy'}</span>
+	{#if paneIsDead}
+		<div class="dead-pane">
+			<iconify-icon icon="mdi:console" class="dead-icon"></iconify-icon>
+			<h2>Pane closed</h2>
+			<p class="dead-target">{target}</p>
+			<p class="dead-hint">The Claude process may have exited or the tmux pane was killed.</p>
+			<Button variant="secondary" onclick={() => goto('/')}>
+				<iconify-icon icon="mdi:arrow-left"></iconify-icon>
+				Back to sessions
 			</Button>
-		{/if}
-		<Button variant="secondary" size="toolbar" class="flex-1" onclick={() => sendKeys('Up')}>
-			<iconify-icon icon="mdi:arrow-up"></iconify-icon>
-			<span>Up</span>
-		</Button>
-		<Button variant="secondary" size="toolbar" class="flex-1" onclick={() => sendKeys('Down')}>
-			<iconify-icon icon="mdi:arrow-down"></iconify-icon>
-			<span>Down</span>
-		</Button>
+		</div>
+	{:else}
+		<div class="output" bind:this={outputElement} onscroll={handleScroll}>
+			{#if preferences.terminalTheming}
+				<TerminalRenderer output={displayOutput} />
+			{:else}
+				<pre class="raw-output">{displayOutput}</pre>
+			{/if}
+		</div>
 
-		<!-- More keys popover -->
-		<Popover.Root bind:open={moreOpen}>
-			<Popover.Trigger class="flex-1 flex-col gap-0.5 px-2 py-1.5 min-w-11 h-auto text-[9px] uppercase tracking-wide inline-flex shrink-0 items-center justify-center rounded-md font-medium cursor-pointer bg-[#222] text-stone-100 hover:bg-[#333]">
-				<iconify-icon icon="mdi:dots-horizontal" style="font-size: 18px;"></iconify-icon>
-				<span>More</span>
-			</Popover.Trigger>
-			<Popover.Content side="top" class="w-auto max-w-[280px] p-2 bg-[#1a1a1a] border-[#333]">
-				<div class="popover-grid">
-					{#each moreKeys as item}
-						<Button variant="secondary" size="toolbar" class="min-w-14 min-h-12" onclick={() => { sendKeys(item.keys); moreOpen = false; }}>
-							<iconify-icon icon={item.icon}></iconify-icon>
-							<span>{item.label}</span>
-						</Button>
-					{/each}
-				</div>
-			</Popover.Content>
-		</Popover.Root>
+		<div class="toolbar">
+			{#if hasSelection}
+				<Button variant="success" size="toolbar" class="flex-1" onclick={copySelection}>
+					<iconify-icon icon={showSelectionCopied ? "mdi:check" : "mdi:content-copy"}></iconify-icon>
+					<span>{showSelectionCopied ? 'Copied!' : 'Copy'}</span>
+				</Button>
+			{/if}
+			<Button variant="secondary" size="toolbar" class="flex-1" onclick={() => sendKeys('Up')}>
+				<iconify-icon icon="mdi:arrow-up"></iconify-icon>
+				<span>Up</span>
+			</Button>
+			<Button variant="secondary" size="toolbar" class="flex-1" onclick={() => sendKeys('Down')}>
+				<iconify-icon icon="mdi:arrow-down"></iconify-icon>
+				<span>Down</span>
+			</Button>
 
-		<!-- Commands popover -->
-		<Popover.Root bind:open={commandsOpen}>
-			<Popover.Trigger class="flex-1 flex-col gap-0.5 px-2 py-1.5 min-w-11 h-auto text-[9px] uppercase tracking-wide inline-flex shrink-0 items-center justify-center rounded-md font-medium cursor-pointer bg-[#222] text-stone-100 hover:bg-[#333]">
-				<iconify-icon icon="mdi:lightning-bolt" style="font-size: 18px;"></iconify-icon>
-				<span>Cmds</span>
-			</Popover.Trigger>
-			<Popover.Content side="top" class="w-auto max-w-[320px] p-2 bg-[#1a1a1a] border-[#333]">
-				<div class="popover-cmds">
-					{#each commands as cmd}
-						{#if cmd.label === 'Ctrl-L'}
-							<Button variant="secondary" class="justify-start gap-2 w-full h-10 text-sm" onclick={() => { sendKeys('C-l'); commandsOpen = false; }}>
-								<iconify-icon icon={cmd.icon}></iconify-icon>
-								{cmd.label}
+			<!-- More keys popover -->
+			<Popover.Root bind:open={moreOpen}>
+				<Popover.Trigger class="flex-1 flex-col gap-0.5 px-2 py-1.5 min-w-11 h-auto text-[9px] uppercase tracking-wide inline-flex shrink-0 items-center justify-center rounded-md font-medium cursor-pointer bg-[#222] text-stone-100 hover:bg-[#333]">
+					<iconify-icon icon="mdi:dots-horizontal" style="font-size: 18px;"></iconify-icon>
+					<span>More</span>
+				</Popover.Trigger>
+				<Popover.Content side="top" class="w-auto max-w-[280px] p-2 bg-[#1a1a1a] border-[#333]">
+					<div class="popover-grid">
+						{#each moreKeys as item}
+							<Button variant="secondary" size="toolbar" class="min-w-14 min-h-12" onclick={() => { sendKeys(item.keys); moreOpen = false; }}>
+								<iconify-icon icon={item.icon}></iconify-icon>
+								<span>{item.label}</span>
 							</Button>
-						{:else}
-							<Button variant="secondary" class="justify-start gap-2 w-full h-10 text-sm" onclick={() => fillInput(cmd.text)}>
-								<iconify-icon icon={cmd.icon}></iconify-icon>
-								{cmd.label}
-							</Button>
-						{/if}
-					{/each}
-				</div>
-			</Popover.Content>
-		</Popover.Root>
+						{/each}
+					</div>
+				</Popover.Content>
+			</Popover.Root>
 
-		<Button variant="secondary" size="toolbar" class="flex-1" onclick={() => sendKeys('Escape')}>
-			<iconify-icon icon="mdi:stop"></iconify-icon>
-			<span>Esc</span>
-		</Button>
-		<Button variant="ghost-destructive" size="toolbar" class="flex-1" onclick={() => sendKeys('C-c')}>
-			<iconify-icon icon="mdi:cancel"></iconify-icon>
-			<span>Ctrl-C</span>
-		</Button>
-	</div>
+			<!-- Commands popover -->
+			<Popover.Root bind:open={commandsOpen}>
+				<Popover.Trigger class="flex-1 flex-col gap-0.5 px-2 py-1.5 min-w-11 h-auto text-[9px] uppercase tracking-wide inline-flex shrink-0 items-center justify-center rounded-md font-medium cursor-pointer bg-[#222] text-stone-100 hover:bg-[#333]">
+					<iconify-icon icon="mdi:lightning-bolt" style="font-size: 18px;"></iconify-icon>
+					<span>Cmds</span>
+				</Popover.Trigger>
+				<Popover.Content side="top" class="w-auto max-w-[320px] p-2 bg-[#1a1a1a] border-[#333]">
+					<div class="popover-cmds">
+						{#each commands as cmd}
+							{#if cmd.label === 'Ctrl-L'}
+								<Button variant="secondary" class="justify-start gap-2 w-full h-10 text-sm" onclick={() => { sendKeys('C-l'); commandsOpen = false; }}>
+									<iconify-icon icon={cmd.icon}></iconify-icon>
+									{cmd.label}
+								</Button>
+							{:else}
+								<Button variant="secondary" class="justify-start gap-2 w-full h-10 text-sm" onclick={() => fillInput(cmd.text)}>
+									<iconify-icon icon={cmd.icon}></iconify-icon>
+									{cmd.label}
+								</Button>
+							{/if}
+						{/each}
+					</div>
+				</Popover.Content>
+			</Popover.Root>
 
-	<form class="input-row" onsubmit={(e) => { e.preventDefault(); sendText(); }}>
-		<textarea
-			bind:this={textareaElement}
-			bind:value={textInput}
-			placeholder="Type a message..."
-			rows={1}
-			onkeydown={handleKeydown}
-			oninput={autoResize}
-		></textarea>
-		<Button type="submit" variant="success" class="min-w-[52px] min-h-[48px] text-lg">
-			<iconify-icon icon="mdi:send"></iconify-icon>
-		</Button>
-	</form>
+			<Button variant="secondary" size="toolbar" class="flex-1" onclick={() => sendKeys('Escape')}>
+				<iconify-icon icon="mdi:stop"></iconify-icon>
+				<span>Esc</span>
+			</Button>
+			<Button variant="ghost-destructive" size="toolbar" class="flex-1" onclick={() => sendKeys('C-c')}>
+				<iconify-icon icon="mdi:cancel"></iconify-icon>
+				<span>Ctrl-C</span>
+			</Button>
+		</div>
+
+		<form class="input-row" onsubmit={(e) => { e.preventDefault(); sendText(); }}>
+			<textarea
+				bind:this={textareaElement}
+				bind:value={textInput}
+				placeholder="Type a message..."
+				rows={1}
+				onkeydown={handleKeydown}
+				oninput={autoResize}
+			></textarea>
+			<Button type="submit" variant="success" class="min-w-[52px] min-h-[48px] text-lg">
+				<iconify-icon icon="mdi:send"></iconify-icon>
+			</Button>
+		</form>
+	{/if}
 </div>
 
 <AlertDialog.Root bind:open={showConfirmKill}>
@@ -578,5 +599,43 @@
 
 	.input-row textarea::placeholder {
 		color: #666;
+	}
+
+	.dead-pane {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 12px;
+		padding: 32px;
+		color: #888;
+		text-align: center;
+	}
+
+	.dead-pane :global(.dead-icon) {
+		font-size: 48px;
+		color: #555;
+	}
+
+	.dead-pane h2 {
+		font-size: 20px;
+		font-weight: 600;
+		color: #aaa;
+		margin: 0;
+	}
+
+	.dead-target {
+		font-family: monospace;
+		font-size: 13px;
+		color: #666;
+		margin: 0;
+	}
+
+	.dead-hint {
+		font-size: 13px;
+		color: #555;
+		margin: 0;
+		max-width: 300px;
 	}
 </style>
