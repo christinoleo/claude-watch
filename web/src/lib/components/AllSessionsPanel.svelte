@@ -587,6 +587,7 @@
 		display: flex;
 		align-items: center;
 		gap: 4px;
+		font-variant-emoji: text;
 	}
 
 	.subfolder-icon {
