@@ -26,6 +26,7 @@
 	let showConfirmKill = $state(false);
 	let moreOpen = $state(false);
 	let commandsOpen = $state(false);
+	const rcUrl = $derived(currentSession?.rc_url ?? null);
 
 	const moreKeys: { label: string; keys: string; icon: string }[] = [
 		{ label: 'Left', keys: 'Left', icon: 'mdi:arrow-left' },
@@ -304,15 +305,22 @@
 					<iconify-icon icon="mdi:fit-to-screen"></iconify-icon>
 					<span>Fit</span>
 				</Button>
-				<Button
-					variant={preferences.terminalTheming ? "secondary" : "ghost"}
-					size="toolbar"
-					onclick={() => preferences.toggle('terminalTheming')}
-					title="Toggle syntax highlighting"
-				>
-					<iconify-icon icon={preferences.terminalTheming ? "mdi:palette" : "mdi:palette-outline"}></iconify-icon>
-					<span>Theme</span>
-				</Button>
+				{#if rcUrl}
+					<Button variant="secondary" size="toolbar" onclick={() => window.open(rcUrl, '_blank')} title="Open Remote Control">
+						<iconify-icon icon="mdi:cellphone-link"></iconify-icon>
+						<span>RC</span>
+					</Button>
+				{:else}
+					<Button
+						variant={preferences.terminalTheming ? "secondary" : "ghost"}
+						size="toolbar"
+						onclick={() => preferences.toggle('terminalTheming')}
+						title="Toggle syntax highlighting"
+					>
+						<iconify-icon icon={preferences.terminalTheming ? "mdi:palette" : "mdi:palette-outline"}></iconify-icon>
+						<span>Theme</span>
+					</Button>
+				{/if}
 				<Button variant="ghost-destructive" size="toolbar" onclick={() => (showConfirmKill = true)} title="Kill Session">
 					<iconify-icon icon="mdi:power"></iconify-icon>
 					<span>Kill</span>
@@ -638,4 +646,5 @@
 		margin: 0;
 		max-width: 300px;
 	}
+
 </style>

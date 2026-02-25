@@ -33,15 +33,28 @@ interface ClaudeSettings {
   [key: string]: unknown;
 }
 
+/** True when running from source (bun src/cli.ts) vs built dist/ */
+const isDev = __dirname.includes("/src/");
+
 export function getHookScriptPath(scriptName: string): string {
-  // In production, scripts are in dist/hooks/
-  // During development, they might be in src/hooks/
-  const distPath = join(__dirname, "..", "hooks", scriptName);
-  return distPath;
+  if (isDev) {
+    // Running from source — use .ts extension (bun can execute it directly)
+    const tsName = scriptName.replace(/\.js$/, ".ts");
+    return join(__dirname, "..", "hooks", tsName);
+  }
+  // Production — .js files live alongside us in dist/
+  return join(__dirname, "..", "hooks", scriptName);
+}
+
+/** Returns the runner command for hook scripts */
+export function getHookRunner(): string {
+  // In dev, bun runs .ts directly; in prod, node runs .js
+  return isDev ? "bun" : "node";
 }
 
 export function getClaudeWatchHooks(): HooksConfig {
   const hookScript = getHookScriptPath("claude-mux-hook.js");
+  const runner = getHookRunner();
 
   return {
     SessionStart: [
@@ -49,7 +62,7 @@ export function getClaudeWatchHooks(): HooksConfig {
         hooks: [
           {
             type: "command",
-            command: `node "${hookScript}" session-start`,
+            command: `${runner} "${hookScript}" session-start`,
           },
         ],
       },
@@ -59,7 +72,7 @@ export function getClaudeWatchHooks(): HooksConfig {
         hooks: [
           {
             type: "command",
-            command: `node "${hookScript}" user-prompt-submit`,
+            command: `${runner} "${hookScript}" user-prompt-submit`,
           },
         ],
       },
@@ -69,7 +82,7 @@ export function getClaudeWatchHooks(): HooksConfig {
         hooks: [
           {
             type: "command",
-            command: `node "${hookScript}" stop`,
+            command: `${runner} "${hookScript}" stop`,
           },
         ],
       },
@@ -79,7 +92,7 @@ export function getClaudeWatchHooks(): HooksConfig {
         hooks: [
           {
             type: "command",
-            command: `node "${hookScript}" permission-request`,
+            command: `${runner} "${hookScript}" permission-request`,
           },
         ],
       },
@@ -90,7 +103,7 @@ export function getClaudeWatchHooks(): HooksConfig {
         hooks: [
           {
             type: "command",
-            command: `node "${hookScript}" notification-idle`,
+            command: `${runner} "${hookScript}" notification-idle`,
           },
         ],
       },
@@ -99,7 +112,7 @@ export function getClaudeWatchHooks(): HooksConfig {
         hooks: [
           {
             type: "command",
-            command: `node "${hookScript}" notification-permission`,
+            command: `${runner} "${hookScript}" notification-permission`,
           },
         ],
       },
@@ -108,7 +121,7 @@ export function getClaudeWatchHooks(): HooksConfig {
         hooks: [
           {
             type: "command",
-            command: `node "${hookScript}" notification-elicitation`,
+            command: `${runner} "${hookScript}" notification-elicitation`,
           },
         ],
       },
@@ -118,7 +131,7 @@ export function getClaudeWatchHooks(): HooksConfig {
         hooks: [
           {
             type: "command",
-            command: `node "${hookScript}" pre-tool-use`,
+            command: `${runner} "${hookScript}" pre-tool-use`,
           },
         ],
       },
@@ -128,7 +141,7 @@ export function getClaudeWatchHooks(): HooksConfig {
         hooks: [
           {
             type: "command",
-            command: `node "${hookScript}" post-tool-use`,
+            command: `${runner} "${hookScript}" post-tool-use`,
           },
         ],
       },
@@ -138,7 +151,7 @@ export function getClaudeWatchHooks(): HooksConfig {
         hooks: [
           {
             type: "command",
-            command: `node "${hookScript}" post-tool-use-failure`,
+            command: `${runner} "${hookScript}" post-tool-use-failure`,
           },
         ],
       },
@@ -148,7 +161,7 @@ export function getClaudeWatchHooks(): HooksConfig {
         hooks: [
           {
             type: "command",
-            command: `node "${hookScript}" session-end`,
+            command: `${runner} "${hookScript}" session-end`,
           },
         ],
       },

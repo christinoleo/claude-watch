@@ -259,7 +259,12 @@
 				{#if isOrchestrator}
 					<div class="session-role">orch</div>
 				{/if}
-				<div class="target">{session.pane_title || session.tmux_target}</div>
+				<div class="target">
+					{session.pane_title || session.tmux_target}
+					{#if session.rc_url}
+						<iconify-icon icon="mdi:cellphone-link" style="color: #27ae60; font-size: 12px; margin-left: 4px;" title="Remote Control active"></iconify-icon>
+					{/if}
+				</div>
 				<div class="action">{isDead ? 'pane closed' : (session.current_action || session.state)}</div>
 			</div>
 			{#if !compact && !isDead}

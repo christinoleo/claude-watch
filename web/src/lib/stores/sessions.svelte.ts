@@ -23,12 +23,13 @@ export interface Session {
 	screenshots?: Screenshot[];
 	chrome_active?: boolean;
 	linked_to?: string | null;
+	rc_url?: string | null;
 }
 
 /** Fields that change frequently and should trigger a session object replacement */
 const VOLATILE_KEYS: (keyof Session)[] = [
 	'state', 'current_action', 'prompt_text', 'last_update',
-	'pane_title', 'pane_alive', 'chrome_active', 'linked_to'
+	'pane_title', 'pane_alive', 'chrome_active', 'linked_to', 'rc_url'
 ];
 
 /** Fast shallow comparison of two sessions on volatile fields + screenshots */

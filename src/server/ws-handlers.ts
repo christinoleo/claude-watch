@@ -13,7 +13,7 @@ import { promisify } from 'util';
 
 const execFileAsync = promisify(execFile);
 import { getAllSessions, updateSession, readLinks, cleanupStaleSessions, type Session } from '../db/index.js';
-import { checkForInterruption, getPaneTitle } from '../tmux/pane.js';
+import { checkForInterruption, checkForInterruptionAsync, getPaneTitle, getAllPaneTitles, detectRemoteControlUrl, capturePaneContentAsync } from '../tmux/pane.js';
 import { resizeTmuxWindow } from '../tmux/resize.js';
 import { sessionWatcher } from './watcher.js';
 
@@ -175,6 +175,74 @@ export function getEnrichedSessions(): (Session & { pane_title: string | null; p
 	return deduplicateByTmuxTarget(enrichedSessions);
 }
 
+/**
+ * Async version of syncSessionStates. Does not block the event loop.
+ * Runs all interruption checks concurrently.
+ */
+async function syncSessionStatesAsync(): Promise<void> {
+	const sessions = getAllSessions().filter((s) => s.tmux_target);
+	await Promise.all(
+		sessions.map(async (session) => {
+			if (!session.tmux_target) return;
+			const update = await checkForInterruptionAsync(session.tmux_target);
+			if (update && session.state !== 'idle') {
+				updateSession(session.id, update);
+			}
+		})
+	);
+}
+
+/**
+ * Async version of getEnrichedSessions. Uses batched tmux calls
+ * and concurrent interruption checks to avoid blocking the event loop.
+ */
+export async function getEnrichedSessionsAsync(): Promise<(Session & { pane_title: string | null; pane_alive: boolean })[]> {
+	// Run interrupt checks and pane title batch fetch concurrently
+	const [, paneTitles] = await Promise.all([
+		syncSessionStatesAsync(),
+		getAllPaneTitles()
+	]);
+
+	const sessions = getAllSessions();
+	const links = readLinks();
+
+	// Scan for Remote Control URLs in pane content (only for sessions without one)
+	await Promise.all(
+		sessions
+			.filter((s) => s.tmux_target && !s.rc_url)
+			.map(async (s) => {
+				const content = await capturePaneContentAsync(s.tmux_target!);
+				if (!content) return;
+				const rcUrl = detectRemoteControlUrl(content);
+				if (rcUrl) {
+					updateSession(s.id, { rc_url: rcUrl });
+					s.rc_url = rcUrl;
+				}
+			})
+	);
+
+	const enrichedSessions = sessions.map((s) => {
+		const paneTitle = s.tmux_target ? (paneTitles.get(s.tmux_target) ?? null) : null;
+		const enriched: Session & { pane_title: string | null; pane_alive: boolean } = {
+			...s,
+			pane_title: paneTitle,
+			pane_alive: s.tmux_target ? paneTitles.has(s.tmux_target) : true,
+		};
+
+		if (s.tmux_target && links[s.tmux_target]) {
+			const mainTarget = links[s.tmux_target];
+			const mainSession = sessions.find((m) => m.tmux_target === mainTarget);
+			if (mainSession) {
+				enriched.linked_to = mainSession.id;
+			}
+		}
+
+		return enriched;
+	});
+
+	return deduplicateByTmuxTarget(enrichedSessions);
+}
+
 // ============================================================================
 // Terminal Helpers
 // ============================================================================
@@ -207,6 +275,7 @@ export class SessionsWsManager {
 	private lastHash = '';
 	private config: Required<WsConfig>;
 	private droppedClients = 0;
+	private refreshing = false;
 
 	constructor(config?: WsConfig) {
 		this.config = { ...DEFAULT_CONFIG, ...config };
@@ -252,9 +321,9 @@ export class SessionsWsManager {
 			console.log('[ws:sessions] First client, subscribing to watcher');
 			this.unsubscribe = sessionWatcher.subscribe(() => this.refreshAndBroadcast());
 			// Start interrupt check timer - runs independently of file changes
-			// to catch interruptions triggered by web UI (Escape key)
+			// to catch interruptions triggered by web UI (Escape key).
+			// Uses async getEnrichedSessionsAsync to avoid blocking the event loop.
 			this.interruptCheckTimer = setInterval(() => {
-				syncSessionStates();
 				this.refreshAndBroadcast();
 			}, 500);
 			// Cleanup stale sessions (dead PIDs) periodically
@@ -265,7 +334,8 @@ export class SessionsWsManager {
 		} else {
 			console.log('[ws:sessions] addClient: clients=', this.clients.size, 'hasUnsubscribe=', !!this.unsubscribe);
 		}
-		this.sendToClient(client, this.createMessage('connected'));
+		// Send initial state synchronously so client gets data immediately
+		this.sendToClient(client, this.createMessageSync('connected'));
 		return true;
 	}
 
@@ -300,39 +370,61 @@ export class SessionsWsManager {
 		}
 	}
 
-	private createMessage(type: 'sessions' | 'connected'): SessionsMessage {
+	/** Sync version for initial client connect (one-time cost) */
+	private createMessageSync(type: 'sessions' | 'connected'): SessionsMessage {
 		const sessions = getEnrichedSessions();
 		return { type, sessions, count: sessions.length, timestamp: Date.now() };
 	}
 
-	private refreshAndBroadcast(): void {
-		console.log('[ws:sessions] refreshAndBroadcast called, clients:', this.clients.size);
-		const message = this.createMessage('sessions');
-		const hash = JSON.stringify(message.sessions);
-		if (hash === this.lastHash) {
-			console.log('[ws:sessions] Hash unchanged, skipping broadcast');
-			return;
-		}
-		console.log('[ws:sessions] Broadcasting to', this.clients.size, 'clients');
-		this.lastHash = hash;
-		const data = JSON.stringify(message);
+	private async createMessageAsync(type: 'sessions' | 'connected'): Promise<SessionsMessage> {
+		const sessions = await getEnrichedSessionsAsync();
+		return { type, sessions, count: sessions.length, timestamp: Date.now() };
+	}
 
-		for (const client of this.clients) {
-			if (!this.sendToClient(client, message, data)) {
-				// Client is slow/dead, remove it
-				this.clients.delete(client);
-				this.droppedClients++;
+	private refreshAndBroadcast(): void {
+		// Guard against overlapping async refresh cycles
+		if (this.refreshing) return;
+		this.refreshing = true;
+
+		this.createMessageAsync('sessions')
+			.then((message) => {
+				const hash = JSON.stringify(message.sessions);
+				if (hash === this.lastHash) {
+					return;
+				}
+				this.lastHash = hash;
+				const data = JSON.stringify(message);
+
+				for (const client of this.clients) {
+					if (!this.sendToClient(client, message, data)) {
+						this.clients.delete(client);
+						this.droppedClients++;
+						log(
+							{
+								level: 'warn',
+								component: 'sessions',
+								message: 'Dropped slow client',
+								data: { total: this.clients.size }
+							},
+							this.config
+						);
+					}
+				}
+			})
+			.catch((err) => {
 				log(
 					{
-						level: 'warn',
+						level: 'error',
 						component: 'sessions',
-						message: 'Dropped slow client',
-						data: { total: this.clients.size }
+						message: 'Refresh failed',
+						data: { error: String(err) }
 					},
 					this.config
 				);
-			}
-		}
+			})
+			.finally(() => {
+				this.refreshing = false;
+			});
 	}
 
 	private sendToClient(client: WsClient, _message: SessionsMessage, data?: string): boolean {

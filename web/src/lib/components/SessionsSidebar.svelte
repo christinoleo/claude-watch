@@ -127,7 +127,10 @@
 											</span>
 											<div class="session-info">
 												<div class="session-role">main</div>
-												<div class="session-name">{item.main.pane_title || item.main.tmux_target}</div>
+												<div class="session-name">
+													{item.main.pane_title || item.main.tmux_target}
+													{#if item.main.rc_url}<iconify-icon icon="mdi:cellphone-link" style="color: #27ae60; font-size: 11px; margin-left: 3px;" title="RC"></iconify-icon>{/if}
+												</div>
 												{#if isDead}
 													<div class="session-action">pane closed</div>
 												{:else if item.main.current_action}
@@ -154,7 +157,10 @@
 											</span>
 											<div class="session-info">
 												<div class="session-role">orch</div>
-												<div class="session-name">{item.orchestrator.pane_title || item.orchestrator.tmux_target}</div>
+												<div class="session-name">
+													{item.orchestrator.pane_title || item.orchestrator.tmux_target}
+													{#if item.orchestrator.rc_url}<iconify-icon icon="mdi:cellphone-link" style="color: #27ae60; font-size: 11px; margin-left: 3px;" title="RC"></iconify-icon>{/if}
+												</div>
 												{#if isDead}
 													<div class="session-action">pane closed</div>
 												{:else if item.orchestrator.current_action}
@@ -181,7 +187,10 @@
 										{/if}
 									</span>
 									<div class="session-info">
-										<div class="session-name">{item.session.pane_title || item.session.tmux_target}</div>
+										<div class="session-name">
+											{item.session.pane_title || item.session.tmux_target}
+											{#if item.session.rc_url}<iconify-icon icon="mdi:cellphone-link" style="color: #27ae60; font-size: 11px; margin-left: 3px;" title="RC"></iconify-icon>{/if}
+										</div>
 										{#if isDead}
 											<div class="session-action">pane closed</div>
 										{:else if item.session.current_action}

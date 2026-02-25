@@ -1,5 +1,8 @@
-import { execFileSync } from "child_process";
+import { execFileSync, execFile } from "child_process";
+import { promisify } from "util";
 import { isInTmux } from "./detect.js";
+
+const execFileAsync = promisify(execFile);
 
 /**
  * Get the title of a tmux pane.
@@ -39,6 +42,75 @@ export function capturePaneContent(target: string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Async version of getPaneTitle. Does not block the event loop.
+ */
+export async function getPaneTitleAsync(target: string): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync("tmux", ["display-message", "-p", "-t", target, "#{pane_title}"], {
+      encoding: "utf-8",
+      timeout: 1000,
+    });
+    return stdout.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Batch-fetch all pane titles in a single tmux command.
+ * Returns a Map of "session:window.pane" -> title (or null if pane has no title).
+ */
+export async function getAllPaneTitles(): Promise<Map<string, string | null>> {
+  const result = new Map<string, string | null>();
+  try {
+    const { stdout } = await execFileAsync("tmux", [
+      "list-panes", "-a", "-F", "#{session_name}:#{window_index}.#{pane_index}\t#{pane_title}"
+    ], { encoding: "utf-8", timeout: 2000 });
+
+    for (const line of stdout.trim().split("\n")) {
+      if (!line) continue;
+      const tabIdx = line.indexOf("\t");
+      if (tabIdx === -1) continue;
+      const target = line.slice(0, tabIdx);
+      const title = line.slice(tabIdx + 1).trim();
+      result.set(target, title || null);
+    }
+  } catch {
+    // tmux not available or no panes
+  }
+  return result;
+}
+
+/**
+ * Async version of capturePaneContent. Does not block the event loop.
+ */
+export async function capturePaneContentAsync(target: string): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync("tmux", ["capture-pane", "-p", "-t", target], {
+      encoding: "utf-8",
+      timeout: 1000,
+    });
+    return stdout;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Async version of checkForInterruption. Does not block the event loop.
+ */
+export async function checkForInterruptionAsync(tmuxTarget: string): Promise<{ state: 'idle'; current_action: null; prompt_text: null } | null> {
+  const content = await capturePaneContentAsync(tmuxTarget);
+  if (!content) return null;
+
+  const interruption = detectRecentInterruption(content);
+  if (interruption) {
+    return { state: 'idle', current_action: null, prompt_text: null };
+  }
+  return null;
 }
 
 /**
@@ -146,6 +218,22 @@ export function detectRecentInterruption(content: string): 'interrupted' | 'decl
   if (slice.includes('User declined to answer')) return 'declined';
 
   return null;
+}
+
+/**
+ * Detect a Remote Control URL in pane content.
+ * Strips ANSI escape codes before matching.
+ * Returns the URL or null if not found.
+ */
+export function detectRemoteControlUrl(content: string): string | null {
+  if (!content) return null;
+
+  // Strip ANSI escape sequences
+  const clean = content.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
+
+  // Match claude.ai/code URLs (RC session URLs)
+  const match = clean.match(/https:\/\/claude\.ai\/code[^\s)\]>]*/);
+  return match ? match[0] : null;
 }
 
 /**

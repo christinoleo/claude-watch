@@ -51,6 +51,7 @@ export interface Session {
   screenshots?: Screenshot[];
   chrome_active?: boolean;
   linked_to?: string | null;
+  rc_url?: string | null;
 }
 
 export interface SessionInput {
@@ -64,12 +65,14 @@ export interface SessionInput {
   current_action?: string | null;
   prompt_text?: string | null;
   linked_to?: string | null;
+  rc_url?: string | null;
 }
 
 export interface SessionUpdate {
   state?: SessionState;
   current_action?: string | null;
   prompt_text?: string | null;
+  rc_url?: string | null;
 }
 
 /**
@@ -132,6 +135,7 @@ export function upsertSession(input: SessionInput): void {
     prompt_text: input.prompt_text ?? existing?.prompt_text ?? null,
     last_update: Date.now(),
     linked_to: input.linked_to ?? existing?.linked_to ?? null,
+    rc_url: input.rc_url ?? existing?.rc_url ?? null,
   };
 
   writeSessionFile(session);
@@ -152,6 +156,9 @@ export function updateSession(id: string, update: SessionUpdate): void {
   }
   if (update.prompt_text !== undefined) {
     session.prompt_text = update.prompt_text;
+  }
+  if (update.rc_url !== undefined) {
+    session.rc_url = update.rc_url;
   }
   session.last_update = Date.now();
 

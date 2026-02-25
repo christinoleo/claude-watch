@@ -60,6 +60,7 @@ interface Session {
   screenshots?: Screenshot[];
   chrome_active?: boolean;
   linked_to?: string | null;
+  rc_url?: string | null;
 }
 
 interface HookInput {
