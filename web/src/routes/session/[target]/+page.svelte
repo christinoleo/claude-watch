@@ -435,18 +435,18 @@
 					<iconify-icon icon="mdi:lightning-bolt" style="font-size: 18px;"></iconify-icon>
 					<span>Cmds</span>
 				</Popover.Trigger>
-				<Popover.Content side="top" class="w-auto max-w-[320px] p-2 bg-[#1a1a1a] border-[#333]">
-					<div class="popover-cmds">
+				<Popover.Content side="top" class="w-auto p-2 bg-[#1a1a1a] border-[#333]">
+					<div class="popover-grid">
 						{#each commands as cmd}
 							{#if cmd.label === 'Ctrl-L'}
-								<Button variant="secondary" class="justify-start gap-2 w-full h-10 text-sm" onclick={() => { sendKeys('C-l'); commandsOpen = false; }}>
+								<Button variant="secondary" size="toolbar" class="min-w-14 min-h-12" onclick={() => { sendKeys('C-l'); commandsOpen = false; }}>
 									<iconify-icon icon={cmd.icon}></iconify-icon>
-									{cmd.label}
+									<span>{cmd.label}</span>
 								</Button>
 							{:else}
-								<Button variant="secondary" class="justify-start gap-2 w-full h-10 text-sm" onclick={() => fillInput(cmd.text)}>
+								<Button variant="secondary" size="toolbar" class="min-w-14 min-h-12" onclick={() => fillInput(cmd.text)}>
 									<iconify-icon icon={cmd.icon}></iconify-icon>
-									{cmd.label}
+									<span>{cmd.label}</span>
 								</Button>
 							{/if}
 						{/each}
@@ -633,14 +633,6 @@
 		gap: 6px;
 	}
 
-	.popover-cmds {
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-		max-height: 60vh;
-		overflow-y: auto;
-		-webkit-overflow-scrolling: touch;
-	}
 
 	.input-row textarea::-webkit-scrollbar {
 		display: none;
