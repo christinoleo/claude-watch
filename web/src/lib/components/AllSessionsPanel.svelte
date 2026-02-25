@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { sessionStore, stateColor, getProjectColor, groupSessions, type Session } from '$lib/stores/sessions.svelte';
+	import { sessionStore, stateColor, getProjectColor, groupSessions, splitPaneTitle, type Session } from '$lib/stores/sessions.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import * as AlertDialog from '$lib/components/ui/alert-dialog';
@@ -232,6 +232,7 @@
 	{#if session.tmux_target}
 		{@const isActive = session.tmux_target === currentTarget}
 		{@const isDead = session.pane_alive === false}
+		{@const parsed = session.pane_title ? splitPaneTitle(session.pane_title) : null}
 		<a
 			href="/session/{encodeURIComponent(session.tmux_target)}"
 			class="session"
@@ -248,7 +249,7 @@
 					{#if subfolder}
 						<span class="subfolder-icon" title={subfolder}>└</span>
 					{/if}
-					{session.pane_title || session.tmux_target}
+					{parsed?.name || session.tmux_target}
 				</div>
 				<div class="session-status">{isDead ? 'pane closed' : (session.current_action || session.state)}</div>
 			</div>
@@ -258,6 +259,8 @@
 				{/if}
 				{#if isDead}
 					<iconify-icon icon="mdi:close-circle" style="color: #555; font-size: 12px;"></iconify-icon>
+				{:else if parsed?.symbol}
+					<span class="state-symbol" style="color: {stateColor(session.state)}">{parsed.symbol}</span>
 				{:else}
 					<span class="state-dot" style="background: {stateColor(session.state)}"></span>
 				{/if}
@@ -538,8 +541,7 @@
 		transition: opacity 0.15s, background 0.15s, color 0.15s;
 	}
 
-	.project-header:hover .project-add,
-	.other-tmux-header:hover .project-add {
+	.project-header:hover .project-add {
 		opacity: 1;
 	}
 
@@ -619,6 +621,13 @@
 		height: 8px;
 		border-radius: 50%;
 		flex-shrink: 0;
+	}
+
+	.state-symbol {
+		font-size: 14px;
+		line-height: 1;
+		flex-shrink: 0;
+		font-variant-emoji: text;
 	}
 
 	.kill-btn {

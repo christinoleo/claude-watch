@@ -246,3 +246,12 @@ export function getProjectColor(cwd: string): string {
 	const hue = Math.abs(hash) % 360;
 	return `hsl(${hue}, 60%, 40%)`;
 }
+
+/** Split pane title into leading symbol (✳, ⠐, etc.) and clean name */
+export function splitPaneTitle(title: string): { symbol: string | null; name: string } {
+	const match = title.match(/^([\u2800-\u28FF\u2700-\u27BF\u2600-\u26FF\u2B50-\u2B55·•]+)\s*/);
+	if (match) {
+		return { symbol: match[1], name: title.slice(match[0].length) };
+	}
+	return { symbol: null, name: title };
+}

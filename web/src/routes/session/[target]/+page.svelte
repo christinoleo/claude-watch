@@ -4,7 +4,7 @@
 	import { browser } from '$app/environment';
 	import { onDestroy } from 'svelte';
 	import { terminalStore } from '$lib/stores/terminal.svelte';
-	import { sessionStore, stateColor } from '$lib/stores/sessions.svelte';
+	import { sessionStore, stateColor, splitPaneTitle } from '$lib/stores/sessions.svelte';
 	import { preferences } from '$lib/stores/preferences.svelte';
 	import { inputInjection } from '$lib/stores/input-injection.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -21,6 +21,7 @@
 	);
 
 	const paneIsDead = $derived(currentSession?.pane_alive === false);
+	const parsedTitle = $derived(currentSession?.pane_title ? splitPaneTitle(currentSession.pane_title) : null);
 
 	let textInput = $state('');
 	let showConfirmKill = $state(false);
@@ -330,7 +331,7 @@
 	</script>
 
 <svelte:head>
-	<title>{currentSession?.pane_title || target || 'Session'}</title>
+	<title>{parsedTitle?.name || target || 'Session'}</title>
 	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 	<link rel="preconnect" href="https://fonts.googleapis.com" />
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
@@ -340,9 +341,13 @@
 <div class="session-container">
 	<header class="header">
 		<div class="title-row">
-			<span class="state" style="background: {paneIsDead ? '#555' : stateColor(currentSession?.state || 'idle')}"></span>
+			{#if parsedTitle?.symbol}
+				<span class="state-symbol" style="color: {paneIsDead ? '#555' : stateColor(currentSession?.state || 'idle')}">{parsedTitle.symbol}</span>
+			{:else}
+				<span class="state" style="background: {paneIsDead ? '#555' : stateColor(currentSession?.state || 'idle')}"></span>
+			{/if}
 			<div class="title-info">
-				<span class="target">{currentSession?.pane_title || target}</span>
+				<span class="target">{parsedTitle?.name || target}</span>
 				<span class="status">{paneIsDead ? 'pane closed' : (currentSession?.current_action || currentSession?.state || 'idle')}</span>
 			</div>
 		</div>
@@ -536,6 +541,13 @@
 		height: 12px;
 		border-radius: 50%;
 		flex-shrink: 0;
+	}
+
+	.state-symbol {
+		font-size: 18px;
+		line-height: 1;
+		flex-shrink: 0;
+		font-variant-emoji: text;
 	}
 
 	.title-info {
