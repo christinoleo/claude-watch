@@ -27,6 +27,53 @@
 	let moreOpen = $state(false);
 	let commandsOpen = $state(false);
 	const rcUrl = $derived(currentSession?.rc_url ?? null);
+	let rcEnabling = $state(false);
+	let rcTimeout: ReturnType<typeof setTimeout> | null = null;
+
+	// When rc_url appears after enabling, open it and clear the enabling state
+	$effect(() => {
+		if (rcEnabling && rcUrl) {
+			rcEnabling = false;
+			if (rcTimeout) { clearTimeout(rcTimeout); rcTimeout = null; }
+			window.open(rcUrl, '_blank');
+		}
+	});
+
+	// If session returns to idle without rc_url, the command failed
+	$effect(() => {
+		if (rcEnabling && !rcUrl && currentSession?.state === 'idle') {
+			// Small delay: state briefly flips to idle before going busy when processing /rc
+			const check = setTimeout(() => {
+				if (rcEnabling && !currentSession?.rc_url && currentSession?.state === 'idle') {
+					rcEnabling = false;
+					if (rcTimeout) { clearTimeout(rcTimeout); rcTimeout = null; }
+				}
+			}, 3000);
+			return () => clearTimeout(check);
+		}
+	});
+
+	async function enableAndOpenRc() {
+		if (rcUrl) {
+			window.open(rcUrl, '_blank');
+			return;
+		}
+
+		// Session must be idle to accept /rc command
+		if (currentSession?.state !== 'idle') return;
+
+		rcEnabling = true;
+		// Safety timeout: reset after 20s no matter what
+		rcTimeout = setTimeout(() => { rcEnabling = false; rcTimeout = null; }, 20_000);
+
+		// Send /rc command to enable Remote Control
+		await fetch(`/api/sessions/${encodeURIComponent(target)}/send`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ text: '/rc' })
+		});
+		// $effects above handle success (rc_url appears) and failure (returns to idle without url)
+	}
 
 	const moreKeys: { label: string; keys: string; icon: string }[] = [
 		{ label: 'Left', keys: 'Left', icon: 'mdi:arrow-left' },
@@ -43,6 +90,7 @@
 	const commands: { label: string; text: string; icon: string }[] = [
 		{ label: 'Ctrl-L', text: '', icon: 'mdi:eraser' },
 		{ label: '/clear', text: '/clear', icon: 'mdi:broom' },
+		{ label: '/rc', text: '/rc', icon: 'mdi:cellphone-link' },
 		{ label: '/ak:linus', text: '/ak:linus', icon: 'mdi:code-tags-check' },
 		{ label: '/ak:replan', text: '/ak:replan', icon: 'mdi:clipboard-text-outline' },
 		{ label: '/ak:redelta', text: '/ak:redelta', icon: 'mdi:compare' },
@@ -305,22 +353,20 @@
 					<iconify-icon icon="mdi:fit-to-screen"></iconify-icon>
 					<span>Fit</span>
 				</Button>
-				{#if rcUrl}
-					<Button variant="secondary" size="toolbar" onclick={() => window.open(rcUrl, '_blank')} title="Open Remote Control">
+				<Button
+					variant={rcUrl ? "secondary" : "ghost"}
+					size="toolbar"
+					onclick={enableAndOpenRc}
+					disabled={rcEnabling || (!rcUrl && currentSession?.state !== 'idle')}
+					title={rcUrl ? "Open Remote Control" : "Enable Remote Control"}
+				>
+					{#if rcEnabling}
+						<iconify-icon icon="mdi:loading" class="animate-spin"></iconify-icon>
+					{:else}
 						<iconify-icon icon="mdi:cellphone-link"></iconify-icon>
-						<span>RC</span>
-					</Button>
-				{:else}
-					<Button
-						variant={preferences.terminalTheming ? "secondary" : "ghost"}
-						size="toolbar"
-						onclick={() => preferences.toggle('terminalTheming')}
-						title="Toggle syntax highlighting"
-					>
-						<iconify-icon icon={preferences.terminalTheming ? "mdi:palette" : "mdi:palette-outline"}></iconify-icon>
-						<span>Theme</span>
-					</Button>
-				{/if}
+					{/if}
+					<span>RC</span>
+				</Button>
 				<Button variant="ghost-destructive" size="toolbar" onclick={() => (showConfirmKill = true)} title="Kill Session">
 					<iconify-icon icon="mdi:power"></iconify-icon>
 					<span>Kill</span>
