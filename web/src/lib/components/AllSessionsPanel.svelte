@@ -4,11 +4,11 @@
 	import { page } from '$app/stores';
 	import { sessionStore, stateColor, getProjectColor, groupSessions, type Session } from '$lib/stores/sessions.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import { Badge } from '$lib/components/ui/badge';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import * as AlertDialog from '$lib/components/ui/alert-dialog';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
+	import SidebarAccordion from './SidebarAccordion.svelte';
 
 	interface Props {
 		onSessionSelect?: () => void;
@@ -24,6 +24,7 @@
 	}
 
 	let tmuxPanes = $state<TmuxPane[]>([]);
+	let tmuxPanesLoaded = $state(false);
 	let showFolderBrowser = $state(false);
 	let browserPath = $state('');
 	let browserFolders = $state<{ name: string; path: string }[]>([]);
@@ -152,11 +153,15 @@
 		} catch {
 			tmuxPanes = [];
 		}
+		tmuxPanesLoaded = true;
+	}
+
+	function handleOtherTmuxExpand(expanded: boolean) {
+		if (expanded) fetchTmuxPanes();
 	}
 
 	onMount(() => {
 		sessionStore.loadSavedProjects();
-		fetchTmuxPanes();
 	});
 
 	function killSession(id: string, pid: number, tmux_target: string | null) {
@@ -166,21 +171,6 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ pid, tmux_target })
 			});
-		});
-	}
-
-	function deleteProject(cwd: string) {
-		showConfirm('Delete Project', `Delete project "${cwd}" and all its sessions?`, async () => {
-			// Kill all sessions in this project
-			const sessions = sessionsByProject.get(cwd) || [];
-			for (const s of sessions) {
-				await fetch(`/api/sessions/${encodeURIComponent(s.id)}/kill`, {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ pid: s.pid, tmux_target: s.tmux_target })
-				});
-			}
-			sessionStore.removeProject(cwd);
 		});
 	}
 
@@ -238,68 +228,59 @@
 	}
 </script>
 
-{#snippet sessionCard(session: Session, isOrchestrator: boolean)}
+{#snippet sessionCard(session: Session, isOrchestrator: boolean, subfolder: string | null)}
 	{#if session.tmux_target}
 		{@const isActive = session.tmux_target === currentTarget}
 		{@const isDead = session.pane_alive === false}
 		<a
 			href="/session/{encodeURIComponent(session.tmux_target)}"
-			class="session {session.state}"
+			class="session"
 			class:active={isActive}
 			class:orchestrator={isOrchestrator}
 			class:dead={isDead}
 			onclick={(e) => handleSessionClick(e, session.tmux_target!)}
 		>
-			{#if isDead}
-				<iconify-icon icon="mdi:close-circle" style="color: #555; font-size: 14px; flex-shrink: 0;"></iconify-icon>
-			{:else}
-				<span class="state" style="background: {stateColor(session.state)}"></span>
-			{/if}
 			<div class="session-info">
 				{#if isOrchestrator}
-					<div class="session-role">orch</div>
+					<span class="session-role">orch</span>
 				{/if}
-				<div class="target">
-					{session.pane_title || session.tmux_target}
-					{#if session.rc_url}
-						<iconify-icon icon="mdi:cellphone-link" style="color: #27ae60; font-size: 12px; margin-left: 4px;" title="Remote Control active"></iconify-icon>
+				<div class="session-name">
+					{#if subfolder}
+						<span class="subfolder-icon" title={subfolder}>└</span>
 					{/if}
+					{session.pane_title || session.tmux_target}
 				</div>
-				<div class="action">{isDead ? 'pane closed' : (session.current_action || session.state)}</div>
+				<div class="session-status">{isDead ? 'pane closed' : (session.current_action || session.state)}</div>
 			</div>
-			{#if !compact && !isDead}
-				<div class="actions">
-					<Button
-						variant="ghost-destructive"
-						size="icon-sm"
-						onclick={(e: MouseEvent) => { e.preventDefault(); e.stopPropagation(); killSession(session.id, session.pid, session.tmux_target); }}
+			<div class="session-right">
+				{#if session.rc_url}
+					<iconify-icon icon="mdi:cellphone-link" style="color: #27ae60; font-size: 12px;" title="Remote Control active"></iconify-icon>
+				{/if}
+				{#if isDead}
+					<iconify-icon icon="mdi:close-circle" style="color: #555; font-size: 12px;"></iconify-icon>
+				{:else}
+					<span class="state-dot" style="background: {stateColor(session.state)}"></span>
+				{/if}
+				{#if !compact && !isDead}
+					<button
+						class="kill-btn"
+						onclick={(e) => { e.preventDefault(); e.stopPropagation(); killSession(session.id, session.pid, session.tmux_target); }}
 						title="Kill"
 					>
 						<iconify-icon icon="mdi:power"></iconify-icon>
-					</Button>
-				</div>
-			{/if}
+					</button>
+				{/if}
+			</div>
 		</a>
 	{:else}
-		<div class="session {session.state} no-tmux" class:orchestrator={isOrchestrator}>
-			<span class="state" style="background: {stateColor(session.state)}"></span>
+		<div class="session no-tmux" class:orchestrator={isOrchestrator}>
 			<div class="session-info">
-				<div class="target">{session.id}</div>
-				<div class="action">{session.current_action || session.state}</div>
-				<div class="no-tmux-label">No tmux pane</div>
+				<div class="session-name">{session.id}</div>
+				<div class="session-status">{session.current_action || session.state}</div>
 			</div>
-			{#if !compact}
-				<div class="actions">
-					<Button
-						variant="ghost-destructive"
-						size="icon-sm"
-						onclick={() => killSession(session.id, session.pid, session.tmux_target)}
-						title="Kill"
-					>
-						<iconify-icon icon="mdi:power"></iconify-icon>
-					</Button>
-				</div>
-			{/if}
+			<div class="session-right">
+				<span class="state-dot" style="background: {stateColor(session.state)}"></span>
+			</div>
 		</div>
 	{/if}
 {/snippet}
@@ -334,88 +315,78 @@
 		</div>
 	</header>
 
-	<p class="count">{sessionStore.sessions.length} session{sessionStore.sessions.length !== 1 ? 's' : ''}</p>
-
 	<div class="scroll-content">
 		{#if flatProjects.length === 0}
 			<div class="empty">No sessions yet. Click + to add a project.</div>
 		{:else}
-			{#each flatProjects as project}
+			{#each flatProjects.filter(p => p.depth === 0) as project (project.cwd)}
 				{@const color = getProjectColor(project.cwd)}
-				{@const isNested = project.depth > 0}
-				{@const firstSession = project.sessions[0]}
 				{@const grouped = groupSessions(project.sessions)}
-				<div class="project-group" class:nested={isNested} style="margin-left: {project.depth * (compact ? 16 : 24)}px; border-left-color: {color}">
+				{@const childProjects = flatProjects.filter(p => p.depth > 0 && p.cwd.startsWith(project.cwd + '/'))}
+				<div class="project-group" style="border-left-color: {color}">
 					<div class="project-header">
-						<div class="project-info">
-							{#if isNested}
-								<span class="nest-indicator">└</span>
-							{/if}
-							<span class="name">{getProjectName(project.cwd)}</span>
-							<div class="meta">
-								<Badge variant="secondary" class="text-xs">{project.sessions.length}</Badge>
-								{#if !compact}
-									{#if firstSession?.git_root}<Badge variant="outline" class="border-orange-700 text-orange-400">git</Badge>{/if}
-									{#if firstSession?.beads_enabled}<Badge variant="outline" class="border-purple-700 text-purple-400">beads</Badge>{/if}
-								{/if}
-							</div>
+						<div class="project-label">
+							<span class="project-name" style="color: {color}">{getProjectName(project.cwd)}</span>
 						</div>
-						<div class="project-actions">
-							<Button variant="ghost" size="icon-sm" onclick={() => newSessionInProject(project.cwd)} title="New Session">
-								<iconify-icon icon="mdi:plus"></iconify-icon>
-							</Button>
-							{#if !compact}
-								<Button variant="ghost" size="icon-sm" class="hover:bg-red-900/50 hover:text-red-300" onclick={() => deleteProject(project.cwd)} title="Delete Project">
-									<iconify-icon icon="mdi:delete"></iconify-icon>
-								</Button>
-							{/if}
-						</div>
+						<button class="project-add" onclick={() => newSessionInProject(project.cwd)} title="New Session">
+							<iconify-icon icon="mdi:plus"></iconify-icon>
+						</button>
 					</div>
-					<div class="project-sessions">
-						{#each grouped as item}
+					{#each grouped as item (item.type === 'pair' ? item.main.id : item.session.id)}
+						{#if item.type === 'pair'}
+							<div class="session-pair">
+								{@render sessionCard(item.main, false, null)}
+								{@render sessionCard(item.orchestrator, true, null)}
+							</div>
+						{:else}
+							{@render sessionCard(item.session, false, null)}
+						{/if}
+					{/each}
+					{#each childProjects as child (child.cwd)}
+						{@const childGrouped = groupSessions(child.sessions)}
+						{#each childGrouped as item (item.type === 'pair' ? item.main.id : item.session.id)}
+							{@const subPath = child.cwd.slice(project.cwd.length + 1)}
 							{#if item.type === 'pair'}
 								<div class="session-pair">
-									{@render sessionCard(item.main, false)}
-									{@render sessionCard(item.orchestrator, true)}
+									{@render sessionCard(item.main, false, subPath)}
+									{@render sessionCard(item.orchestrator, true, subPath)}
 								</div>
 							{:else}
-								{@render sessionCard(item.session, false)}
+								{@render sessionCard(item.session, false, subPath)}
 							{/if}
-						{:else}
-							<div class="empty-project">No active sessions</div>
 						{/each}
-					</div>
+					{/each}
 				</div>
 			{/each}
 		{/if}
 
-		{#if otherTmuxPanes.length > 0}
-			<div class="other-tmux">
-				<div class="other-tmux-header">
-					<h2>Other tmux</h2>
-					<Button variant="ghost" size="icon-sm" onclick={fetchTmuxPanes} title="Refresh">
-						<iconify-icon icon="mdi:refresh"></iconify-icon>
-					</Button>
-				</div>
-				<div class="other-tmux-list">
-					{#each otherTmuxPanes as pane}
-						<a
-							href="/session/{encodeURIComponent(pane.target)}"
-							class="tmux-pane"
-							onclick={(e) => handleSessionClick(e, pane.target)}
-						>
-							<iconify-icon icon="mdi:console" class="pane-icon"></iconify-icon>
-							<div class="pane-info">
-								<span class="pane-target">{pane.target}</span>
-								{#if !compact}
-									<span class="pane-command">{pane.command}</span>
-								{/if}
-							</div>
-						</a>
-					{/each}
-				</div>
-			</div>
-		{/if}
+		<SidebarAccordion
+			icon="mdi:console"
+			title="Other tmux"
+			count={tmuxPanesLoaded ? otherTmuxPanes.length : null}
+			lazy
+			onExpandChange={handleOtherTmuxExpand}
+		>
+			{#if otherTmuxPanes.length > 0}
+				{#each otherTmuxPanes as pane (pane.target)}
+					<a
+						href="/session/{encodeURIComponent(pane.target)}"
+						class="session tmux-pane"
+						onclick={(e) => handleSessionClick(e, pane.target)}
+					>
+						<div class="session-info">
+							<div class="session-name">{pane.target}</div>
+							{#if !compact}
+								<div class="session-status">{pane.command}</div>
+							{/if}
+						</div>
+						<iconify-icon icon="mdi:console" style="color: #666; font-size: 14px;"></iconify-icon>
+					</a>
+				{/each}
+			{:else}
+				<div class="empty-section">No other tmux panes</div>
+			{/if}
+		</SidebarAccordion>
 	</div>
 </div>
 
@@ -474,18 +445,19 @@
 	.all-sessions-panel {
 		display: flex;
 		flex-direction: column;
-		height: 100%;
-		overflow: hidden;
 	}
 
 	.header {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		padding: 16px;
-		padding-bottom: 12px;
-		border-bottom: 1px solid hsl(var(--border));
+		padding: 12px 16px;
+		border-bottom: 1px solid #222;
 		flex-shrink: 0;
+		position: sticky;
+		top: 0;
+		z-index: 1;
+		background: hsl(var(--background));
 	}
 
 	.title-link {
@@ -498,158 +470,106 @@
 	}
 
 	.header h1 {
-		font-size: 18px;
+		font-size: 16px;
 		margin: 0;
 		transition: color 0.15s;
 	}
 
 	.header-actions {
 		display: flex;
-		gap: 8px;
-	}
-
-	.count {
-		color: hsl(var(--muted-foreground));
-		font-size: 13px;
-		margin: 0;
-		padding: 8px 16px;
-		flex-shrink: 0;
+		gap: 6px;
 	}
 
 	.scroll-content {
-		flex: 1;
-		overflow-y: auto;
-		padding: 0 12px 12px;
+		padding: 8px 0;
 	}
 
 	.empty {
 		color: hsl(var(--muted-foreground));
 		text-align: center;
 		padding: 40px 16px;
-		font-size: 14px;
+		font-size: 13px;
 	}
 
+	/* Project group: minimal colored left border */
 	.project-group {
-		margin-bottom: 16px;
-		border-left: 3px solid;
-		border-radius: 6px;
-		overflow: hidden;
+		border-left: 2px solid;
+		margin: 0 8px 12px 8px;
 	}
 
-	.project-group.nested {
-		margin-bottom: 10px;
-		margin-top: -6px;
-	}
-
+	/* Project header: just colored text + hover add button */
 	.project-header {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: 10px 12px;
-		background: #292524;
+		padding: 4px 8px 2px;
 	}
 
-	.project-info {
+	.project-label {
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		gap: 4px;
 		min-width: 0;
 	}
 
-	.nest-indicator {
-		font-family: monospace;
-		color: hsl(var(--muted-foreground));
-		margin-right: -2px;
-		font-size: 12px;
-	}
-
-	.project-header .name {
+	.project-name {
+		font-size: 11px;
 		font-weight: 600;
-		font-size: 14px;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
-	.project-header .meta {
+	.project-add {
 		display: flex;
 		align-items: center;
-		gap: 4px;
-		flex-shrink: 0;
+		justify-content: center;
+		width: 20px;
+		height: 20px;
+		border: none;
+		background: none;
+		color: #555;
+		cursor: pointer;
+		border-radius: 4px;
+		font-size: 14px;
+		opacity: 0;
+		transition: opacity 0.15s, background 0.15s, color 0.15s;
 	}
 
-	.project-actions {
-		display: flex;
-		gap: 2px;
-		opacity: 0.5;
-		transition: opacity 0.15s;
-	}
-
-	.project-header:hover .project-actions {
+	.project-header:hover .project-add,
+	.other-tmux-header:hover .project-add {
 		opacity: 1;
 	}
 
-	/* Session pair: side-by-side layout */
-	.session-pair {
-		display: flex;
-		gap: 1px;
-		border-top: 1px solid #222;
+	.project-add:hover {
+		background: #333;
+		color: #fff;
 	}
 
-	.session-pair > :global(.session) {
-		flex: 1;
-		min-width: 0;
-		border-top: none;
-	}
-
-	.project-sessions .session {
+	/* Session row: RC-style two-line layout */
+	.session {
 		display: flex;
 		align-items: center;
-		gap: 10px;
-		padding: 12px;
-		padding-left: 10px;
-		background: #111;
-		border-top: 1px solid #222;
+		gap: 8px;
+		padding: 6px 10px;
 		text-decoration: none;
 		color: inherit;
-		transition: background 0.15s;
+		transition: background 0.1s;
+		cursor: pointer;
 	}
 
-	.project-sessions .session:hover {
+	.session:hover {
 		background: #1a1a1a;
 	}
 
-	.project-sessions .session.active {
-		background: color-mix(in oklch, var(--primary), transparent 75%);
-		border-left: 4px solid var(--primary);
-		padding-left: 6px;
-		box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--primary), transparent 70%);
+	.session.active {
+		background: color-mix(in oklch, var(--primary), transparent 80%);
 	}
 
-	.project-sessions .session.active .target {
+	.session.active .session-name {
 		color: var(--primary);
-	}
-
-	/* Orchestrator session: dimmer styling */
-	.project-sessions :global(.session.orchestrator) {
-		background: #0c0c0c;
-		border-left: 2px solid #333;
-		padding-left: 8px;
-	}
-
-	.project-sessions :global(.session.orchestrator:hover) {
-		background: #151515;
-	}
-
-	.project-sessions :global(.session.orchestrator .target) {
-		color: hsl(var(--muted-foreground));
-	}
-
-	.session .state {
-		width: 12px;
-		height: 12px;
-		border-radius: 50%;
-		flex-shrink: 0;
 	}
 
 	.session-info {
@@ -657,54 +577,130 @@
 		min-width: 0;
 	}
 
-	.session .target {
+	.session-name {
 		font-weight: 600;
-		font-size: 14px;
+		font-size: 13px;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+		line-height: 1.3;
+		display: flex;
+		align-items: center;
+		gap: 4px;
 	}
 
-	.session .action {
-		color: hsl(var(--muted-foreground));
-		font-size: 12px;
+	.subfolder-icon {
+		font-family: monospace;
+		font-size: 11px;
+		color: #666;
+		flex-shrink: 0;
+		cursor: help;
+	}
+
+	.session-status {
+		color: #777;
+		font-size: 11px;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+		line-height: 1.3;
+	}
+
+	.session-right {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		flex-shrink: 0;
+	}
+
+	.state-dot {
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		flex-shrink: 0;
+	}
+
+	.kill-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 20px;
+		height: 20px;
+		border: none;
+		background: none;
+		color: #555;
+		cursor: pointer;
+		border-radius: 4px;
+		font-size: 13px;
+		opacity: 0;
+		transition: opacity 0.15s, color 0.15s;
+	}
+
+	.session:hover .kill-btn {
+		opacity: 1;
+	}
+
+	.kill-btn:hover {
+		color: #e74c3c;
+	}
+
+	/* Orchestrator: dimmer */
+	.session.orchestrator {
+		padding-left: 20px;
+		opacity: 0.6;
+	}
+
+	.session.orchestrator:hover {
+		opacity: 0.8;
+	}
+
+	.session-role {
+		font-size: 9px;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+		color: #555;
+		line-height: 1;
+	}
+
+	/* Session pair: stacked */
+	.session-pair {
+		display: flex;
+		flex-direction: column;
+	}
+
+	/* Dead pane */
+	.session.dead {
+		opacity: 0.4;
+	}
+
+	.session.dead .session-name {
+		text-decoration: line-through;
+		color: #666;
 	}
 
 	.session.no-tmux {
 		cursor: default;
-		opacity: 0.7;
+		opacity: 0.5;
 	}
 
-	.no-tmux-label {
-		color: hsl(var(--muted-foreground));
-		font-size: 11px;
-		font-style: italic;
+	/* Tmux pane items inside accordion */
+	.session.tmux-pane {
+		margin: 0 -12px;
 	}
 
-	.empty-project {
-		padding: 12px;
-		background: #111;
+	.empty-section {
 		color: hsl(var(--muted-foreground));
 		text-align: center;
+		padding: 12px;
 		font-size: 13px;
-		border-radius: 0 0 6px 6px;
-	}
-
-	.actions {
-		display: flex;
-		gap: 4px;
-		flex-shrink: 0;
 	}
 
 	/* Folder browser items */
 	.fb-path {
-		padding: 12px;
+		padding: 10px;
 		background: hsl(var(--muted));
 		font-family: monospace;
-		font-size: 14px;
+		font-size: 13px;
 		color: hsl(var(--muted-foreground));
 		word-break: break-all;
 		border-radius: 6px;
@@ -716,11 +712,11 @@
 		align-items: center;
 		gap: 12px;
 		width: 100%;
-		padding: 10px 12px;
+		padding: 8px 12px;
 		background: transparent;
 		border: none;
 		color: hsl(var(--foreground));
-		font-size: 14px;
+		font-size: 13px;
 		text-align: left;
 		cursor: pointer;
 		border-radius: 6px;
@@ -730,133 +726,41 @@
 		background: hsl(var(--accent));
 	}
 
-	/* Other tmux section */
-	.other-tmux {
-		margin-top: 24px;
-		padding-top: 16px;
-		border-top: 1px solid #333;
-	}
-
-	.other-tmux-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		margin-bottom: 8px;
-	}
-
-	.other-tmux-header h2 {
-		font-size: 14px;
-		font-weight: 600;
-		color: hsl(var(--muted-foreground));
-		margin: 0;
-	}
-
-	.other-tmux-list {
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-	}
-
-	.tmux-pane {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		padding: 8px 12px;
-		background: #1a1a1a;
-		border-radius: 6px;
-		text-decoration: none;
-		color: inherit;
-		transition: background 0.15s;
-	}
-
-	.tmux-pane:hover {
-		background: #252525;
-	}
-
-	.pane-icon {
-		color: hsl(var(--muted-foreground));
-		font-size: 16px;
-		flex-shrink: 0;
-	}
-
-	.pane-info {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		min-width: 0;
-	}
-
-	.pane-target {
-		font-family: monospace;
-		font-size: 12px;
-		color: hsl(var(--foreground));
-	}
-
-	.pane-command {
-		font-size: 12px;
-		color: hsl(var(--muted-foreground));
-	}
-
 	/* Compact mode adjustments */
 	.compact .header {
-		padding: 12px;
-		padding-bottom: 8px;
+		padding: 10px 12px;
 	}
 
 	.compact .header h1 {
-		font-size: 16px;
-	}
-
-	.compact .count {
-		padding: 6px 12px;
-		font-size: 12px;
+		font-size: 14px;
 	}
 
 	.compact .scroll-content {
-		padding: 0 8px 8px;
+		padding: 4px 0;
+	}
+
+	.compact .project-group {
+		margin: 0 4px 8px 4px;
 	}
 
 	.compact .project-header {
-		padding: 8px 10px;
+		padding: 2px 6px 1px;
 	}
 
-	.compact .project-header .name {
-		font-size: 13px;
+	.compact .session {
+		padding: 4px 8px;
 	}
 
-	.compact .project-sessions .session {
-		padding: 10px 8px;
-		gap: 8px;
+	.compact .session-name {
+		font-size: 12px;
 	}
 
-	.compact .session .state {
-		width: 10px;
-		height: 10px;
+	.compact .session-status {
+		font-size: 10px;
 	}
 
-	.compact .session .target {
-		font-size: 13px;
+	.compact .state-dot {
+		width: 7px;
+		height: 7px;
 	}
-
-	.compact .session .action {
-		font-size: 11px;
-	}
-
-	/* Dead pane styling */
-	.project-sessions :global(.session.dead) {
-		opacity: 0.5;
-	}
-
-	.project-sessions :global(.session.dead .target) {
-		text-decoration: line-through;
-		color: hsl(var(--muted-foreground));
-	}
-
-	.session-role {
-		font-size: 9px;
-		text-transform: uppercase;
-		letter-spacing: 0.5px;
-		color: hsl(var(--muted-foreground));
-	}
-
 </style>

@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
+	import SidebarAccordion from './SidebarAccordion.svelte';
 	import type { Screenshot } from '$lib/stores/sessions.svelte';
 
 	interface Props {
@@ -10,7 +10,6 @@
 
 	let { sessionId, screenshots }: Props = $props();
 
-	let expanded = $state(true);
 	let viewingScreenshot = $state<string | null>(null);
 
 	// Swipe tracking
@@ -18,15 +17,10 @@
 	let touchCurrentX = $state(0);
 	let isSwiping = $state(false);
 
-	function toggleExpanded() {
-		expanded = !expanded;
-	}
-
 	async function dismissScreenshot(path: string) {
 		await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/screenshots?path=${encodeURIComponent(path)}`, {
 			method: 'DELETE'
 		});
-		// Close modal if viewing this screenshot
 		if (viewingScreenshot === path) {
 			viewingScreenshot = null;
 		}
@@ -45,7 +39,6 @@
 		return path.split('/').pop() || path;
 	}
 
-	// Touch handlers for swipe-to-dismiss
 	function handleTouchStart(e: TouchEvent) {
 		touchStartX = e.touches[0].clientX;
 		touchCurrentX = touchStartX;
@@ -60,7 +53,6 @@
 	function handleTouchEnd() {
 		if (!isSwiping) return;
 		const deltaX = touchCurrentX - touchStartX;
-		// Swipe left threshold: -100px
 		if (deltaX < -100) {
 			closeModal();
 		}
@@ -76,52 +68,43 @@
 	const swipeOffset = $derived(isSwiping ? Math.min(0, touchCurrentX - touchStartX) : 0);
 </script>
 
-<div class="screenshots-panel">
-	<button class="panel-header" onclick={toggleExpanded} type="button">
-		<iconify-icon icon="mdi:image-multiple"></iconify-icon>
-		<span>Screenshots</span>
-		<Badge variant="outline" class="ml-auto screenshot-count">{screenshots.length}</Badge>
-		<iconify-icon
-			icon={expanded ? 'mdi:chevron-down' : 'mdi:chevron-right'}
-			class="chevron"
-		></iconify-icon>
-	</button>
-
-	{#if expanded}
-		<div class="panel-content">
-			{#if screenshots.length === 0}
-				<div class="empty">No screenshots</div>
-			{:else}
-				<div class="screenshots-grid">
-					{#each screenshots as screenshot (screenshot.path)}
-						<div class="screenshot-item">
-							<button
-								class="thumbnail"
-								onclick={() => openModal(screenshot.path)}
-								title={getFilename(screenshot.path)}
-							>
-								<img
-									src="/api/files/image?path={encodeURIComponent(screenshot.path)}"
-									alt={getFilename(screenshot.path)}
-									loading="lazy"
-								/>
-							</button>
-							<Button
-								variant="ghost"
-								size="icon-sm"
-								class="dismiss-btn"
-								onclick={() => dismissScreenshot(screenshot.path)}
-								title="Dismiss screenshot"
-							>
-								<iconify-icon icon="mdi:close"></iconify-icon>
-							</Button>
-						</div>
-					{/each}
+<SidebarAccordion
+	icon="mdi:image-multiple"
+	title="Screenshots"
+	count={screenshots.length}
+	defaultExpanded
+>
+	{#if screenshots.length === 0}
+		<div class="empty">No screenshots</div>
+	{:else}
+		<div class="screenshots-grid">
+			{#each screenshots as screenshot (screenshot.path)}
+				<div class="screenshot-item">
+					<button
+						class="thumbnail"
+						onclick={() => openModal(screenshot.path)}
+						title={getFilename(screenshot.path)}
+					>
+						<img
+							src="/api/files/image?path={encodeURIComponent(screenshot.path)}"
+							alt={getFilename(screenshot.path)}
+							loading="lazy"
+						/>
+					</button>
+					<Button
+						variant="ghost"
+						size="icon-sm"
+						class="dismiss-btn"
+						onclick={() => dismissScreenshot(screenshot.path)}
+						title="Dismiss screenshot"
+					>
+						<iconify-icon icon="mdi:close"></iconify-icon>
+					</Button>
 				</div>
-			{/if}
+			{/each}
 		</div>
 	{/if}
-</div>
+</SidebarAccordion>
 
 <!-- Fullscreen Modal -->
 {#if viewingScreenshot}
@@ -178,44 +161,6 @@
 {/if}
 
 <style>
-	.screenshots-panel {
-		border-top: 1px solid hsl(var(--border));
-	}
-
-	.panel-header {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		width: 100%;
-		padding: 12px;
-		border: none;
-		background: transparent;
-		color: inherit;
-		font-family: inherit;
-		font-size: 14px;
-		font-weight: 600;
-		cursor: pointer;
-		text-align: left;
-	}
-
-	.panel-header:hover {
-		background: hsl(var(--accent) / 0.5);
-	}
-
-	.panel-header :global(.screenshot-count) {
-		font-size: 11px;
-		padding: 2px 6px;
-	}
-
-	.chevron {
-		font-size: 18px;
-		color: hsl(var(--muted-foreground));
-	}
-
-	.panel-content {
-		padding: 0 12px 12px;
-	}
-
 	.screenshots-grid {
 		display: grid;
 		grid-template-columns: repeat(2, 1fr);
