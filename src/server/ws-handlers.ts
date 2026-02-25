@@ -206,17 +206,20 @@ export async function getEnrichedSessionsAsync(): Promise<(Session & { pane_titl
 	const sessions = getAllSessions();
 	const links = readLinks();
 
-	// Scan for Remote Control URLs in pane content (only for sessions without one)
+	// Scan for Remote Control URLs in pane content (detect new URLs and clear stale ones)
 	await Promise.all(
 		sessions
-			.filter((s) => s.tmux_target && !s.rc_url)
+			.filter((s) => s.tmux_target)
 			.map(async (s) => {
 				const content = await capturePaneContentAsync(s.tmux_target!);
 				if (!content) return;
 				const rcUrl = detectRemoteControlUrl(content);
-				if (rcUrl) {
+				if (rcUrl && rcUrl !== s.rc_url) {
 					updateSession(s.id, { rc_url: rcUrl });
 					s.rc_url = rcUrl;
+				} else if (!rcUrl && s.rc_url) {
+					updateSession(s.id, { rc_url: null });
+					s.rc_url = null;
 				}
 			})
 	);
