@@ -78,7 +78,7 @@
 		<div class="empty">No screenshots</div>
 	{:else}
 		<div class="screenshots-grid">
-			{#each screenshots as screenshot (screenshot.path)}
+			{#each screenshots as screenshot, i (screenshot.path + ':' + i)}
 				<div class="screenshot-item">
 					<button
 						class="thumbnail"

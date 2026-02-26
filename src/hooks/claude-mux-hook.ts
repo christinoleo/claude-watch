@@ -122,6 +122,10 @@ function readSession(id: string): Session | null {
 
 function writeSession(session: Session): void {
   ensureSessionsDir();
+  // Prune screenshots whose files no longer exist
+  if (session.screenshots?.length) {
+    session.screenshots = session.screenshots.filter(s => existsSync(s.path));
+  }
   const path = getSessionPath(session.id);
   const tmpPath = path + ".tmp";
   writeFileSync(tmpPath, JSON.stringify(session, null, 2));
