@@ -4,7 +4,7 @@
 	import { browser } from '$app/environment';
 	import { onDestroy } from 'svelte';
 	import { terminalStore } from '$lib/stores/terminal.svelte';
-	import { sessionStore, stateColor, splitPaneTitle } from '$lib/stores/sessions.svelte';
+	import { sessionStore, stateColor, splitPaneTitle, getSessionDisplayName } from '$lib/stores/sessions.svelte';
 	import { preferences } from '$lib/stores/preferences.svelte';
 	import { inputInjection } from '$lib/stores/input-injection.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -331,7 +331,7 @@
 	</script>
 
 <svelte:head>
-	<title>{parsedTitle?.name || target || 'Session'}</title>
+	<title>{currentSession ? getSessionDisplayName(currentSession) : (target || 'Session')}</title>
 	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 	<link rel="preconnect" href="https://fonts.googleapis.com" />
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
@@ -342,12 +342,12 @@
 	<header class="header">
 		<div class="title-row">
 			{#if parsedTitle?.symbol}
-				<span class="state-symbol" style="color: {paneIsDead ? '#555' : stateColor(currentSession?.state || 'idle')}">{parsedTitle.symbol}</span>
+				<span class="state-symbol" class:braille={parsedTitle.isBraille} style="color: {paneIsDead ? '#555' : stateColor(currentSession?.state || 'idle')}">{parsedTitle.symbol}</span>
 			{:else}
 				<span class="state" style="background: {paneIsDead ? '#555' : stateColor(currentSession?.state || 'idle')}"></span>
 			{/if}
 			<div class="title-info">
-				<span class="target">{parsedTitle?.name || target}</span>
+				<span class="target">{currentSession ? getSessionDisplayName(currentSession) : target}</span>
 				<span class="status">{paneIsDead ? 'pane closed' : (currentSession?.current_action || currentSession?.state || 'idle')}</span>
 			</div>
 		</div>
@@ -548,6 +548,10 @@
 		line-height: 1;
 		flex-shrink: 0;
 		font-variant-emoji: text;
+	}
+
+	.state-symbol.braille {
+		font-size: 22px;
 	}
 
 	.title-info {

@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { sessionStore, stateColor, getProjectColor, groupSessions, splitPaneTitle, type Session } from '$lib/stores/sessions.svelte';
+	import { sessionStore, stateColor, getProjectColor, groupSessions, splitPaneTitle, getSessionDisplayName, type Session } from '$lib/stores/sessions.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import * as AlertDialog from '$lib/components/ui/alert-dialog';
@@ -249,7 +249,7 @@
 					{#if subfolder}
 						<span class="subfolder-icon" title={subfolder}>└</span>
 					{/if}
-					{parsed?.name || session.tmux_target}
+					{getSessionDisplayName(session)}
 				</div>
 				<div class="session-status">{isDead ? 'pane closed' : (session.current_action || session.state)}</div>
 			</div>
@@ -260,7 +260,7 @@
 				{#if isDead}
 					<iconify-icon icon="mdi:close-circle" style="color: #555; font-size: 12px;"></iconify-icon>
 				{:else if parsed?.symbol}
-					<span class="state-symbol" style="color: {stateColor(session.state)}">{parsed.symbol}</span>
+					<span class="state-symbol" class:braille={parsed.isBraille} style="color: {stateColor(session.state)}">{parsed.symbol}</span>
 				{:else}
 					<span class="state-dot" style="background: {stateColor(session.state)}"></span>
 				{/if}
@@ -628,6 +628,10 @@
 		line-height: 1;
 		flex-shrink: 0;
 		font-variant-emoji: text;
+	}
+
+	.state-symbol.braille {
+		font-size: 20px;
 	}
 
 	.kill-btn {

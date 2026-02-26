@@ -248,10 +248,26 @@ export function getProjectColor(cwd: string): string {
 }
 
 /** Split pane title into leading symbol (✳, ⠐, etc.) and clean name */
-export function splitPaneTitle(title: string): { symbol: string | null; name: string } {
+export function splitPaneTitle(title: string): { symbol: string | null; isBraille: boolean; name: string } {
 	const match = title.match(/^([\u2800-\u28FF\u2700-\u27BF\u2600-\u26FF\u2B50-\u2B55·•]+)\s*/);
 	if (match) {
-		return { symbol: match[1], name: title.slice(match[0].length) };
+		const symbol = match[1];
+		return { symbol, isBraille: /^[\u2800-\u28FF]+$/.test(symbol), name: title.slice(match[0].length) };
 	}
-	return { symbol: null, name: title };
+	return { symbol: null, isBraille: false, name: title };
+}
+
+/** Check if a pane title is just the generic "Claude Code" default */
+function isGenericTitle(name: string): boolean {
+	return name === 'Claude Code' || name === '';
+}
+
+/** Get a display name for a session, using prompt_text as fallback when pane title is generic */
+export function getSessionDisplayName(session: Session): string {
+	if (session.pane_title) {
+		const parsed = splitPaneTitle(session.pane_title);
+		if (!isGenericTitle(parsed.name)) return parsed.name;
+	}
+	if (session.prompt_text) return session.prompt_text;
+	return session.tmux_target || session.id;
 }

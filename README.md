@@ -1,7 +1,7 @@
 <p align="center">
   <h1 align="center">claude-mux</h1>
   <p align="center">
-    <strong>A real-time web dashboard for monitoring and controlling multiple Claude Code sessions</strong>
+    <strong>Real-time web dashboard for monitoring and controlling multiple Claude Code sessions</strong>
   </p>
 </p>
 
@@ -14,153 +14,88 @@
 </p>
 
 <p align="center">
-  <a href="#features">Features</a> •
-  <a href="#installation">Installation</a> •
-  <a href="#quick-start">Quick Start</a> •
-  <a href="#web-interface">Web Interface</a> •
-  <a href="#how-it-works">How It Works</a>
+  <a href="#features">Features</a> &bull;
+  <a href="#installation">Installation</a> &bull;
+  <a href="#quick-start">Quick Start</a> &bull;
+  <a href="#cli-commands">CLI</a> &bull;
+  <a href="#how-it-works">Architecture</a>
 </p>
 
 ---
 
-## Screenshots
-
 <p align="center">
-  <img src="docs/images/desktop-dashboard.png" alt="Desktop Dashboard" width="100%">
-  <br>
-  <em>Dashboard view — Monitor all your Claude Code sessions at a glance</em>
+  <img src="docs/images/desktop-dashboard.png" alt="Dashboard" width="100%">
+  <br><em>Dashboard &mdash; sessions grouped by project with live state indicators</em>
 </p>
 
 <p align="center">
-  <img src="docs/images/desktop-session.png" alt="Session View with Syntax Highlighting" width="100%">
-  <br>
-  <em>Session view — Real-time terminal output with syntax highlighting</em>
+  <img src="docs/images/desktop-session.png" alt="Session View" width="100%">
+  <br><em>Session view &mdash; real-time ANSI terminal output with action toolbar</em>
 </p>
 
 <details>
-<summary><strong>Mobile Screenshots</strong></summary>
+<summary><strong>Mobile</strong></summary>
 <br>
 <p align="center">
   <img src="docs/images/mobile-dashboard.png" alt="Mobile Dashboard" width="300">
   &nbsp;&nbsp;&nbsp;
   <img src="docs/images/mobile-session.png" alt="Mobile Session" width="300">
 </p>
-<p align="center"><em>Fully responsive — Control your Claude sessions from your phone</em></p>
+<p align="center"><em>Fully responsive &mdash; control sessions from your phone</em></p>
 </details>
 
 ---
 
 ## Features
 
-### Web Dashboard
-- **Real-time monitoring** of all Claude Code sessions via WebSocket
-- **Project-based organization** — Sessions grouped by working directory
-- **Live status indicators** — See which sessions are busy, idle, or waiting for input
-- **One-click navigation** — Jump to any session instantly
-
-### Syntax Highlighting
-- **Color-coded terminal output** — User prompts, Claude responses, tool calls, and results
-- **Tool-specific colors** — Different colors for Read, Write, Edit, Bash, Task, and more
-- **Diff highlighting** — Green for additions, red for removals in file edits
-- **Toggleable theming** — Switch between styled and raw output
-
-### Mobile-First Design
-- **Fully responsive** — Works on desktop, tablet, and phone
-- **Touch-friendly controls** — Large buttons for common actions
-- **Quick action toolbar** — Send keys (Up, Down, Tab, Esc, Ctrl-C) with one tap
-
-### Session Control
-- **Send text input** — Type messages directly to Claude
-- **Keyboard shortcuts** — Send special keys and key combinations
-- **Terminal resize** — Fit tmux pane to browser viewport
-- **Kill sessions** — Terminate Claude processes when needed
-
-### Optional Features
-- **Authentication** — Password-protect your dashboard
-- **LAN access** — Monitor sessions from any device on your network
+- **Live session monitoring** &mdash; WebSocket-powered, no polling. See state (busy/idle/waiting/permission) at a glance
+- **Project grouping** &mdash; sessions organized by working directory with color-coded borders
+- **ANSI terminal rendering** &mdash; real tmux colors via [ansi_up](https://github.com/drudru/ansi_up), toggleable
+- **Session control** &mdash; send text, keys (Up/Down/Tab/Esc/Ctrl-C), Yes/No/Always quick buttons
+- **Orchestrator pairing** &mdash; main + orchestrator sessions grouped together with role labels
+- **Remote Control** &mdash; auto-detects Claude's `/rc` and opens it in a new window
+- **Mobile-first** &mdash; touch toolbar, hamburger sidebar, swipe gestures
+- **Beads integration** &mdash; browse issues/epics from the sidebar, inject IDs into input
+- **Screenshots panel** &mdash; view and dismiss captured screenshots
+- **Dead pane detection** &mdash; visual indication when a tmux pane closes
+- **Other tmux panes** &mdash; browse and view non-Claude panes too
+- **Auth support** &mdash; optional password protection for LAN access
+- **CLI scripting** &mdash; `send`, `wait`, `status`, `capture` commands for automation
 
 ---
 
 ## Installation
-
-### From npm/bun (recommended)
 
 ```bash
 bun install -g claude-mux
 # or: npm install -g claude-mux
 ```
 
-### From source
+<details>
+<summary><strong>From source</strong></summary>
 
 ```bash
 git clone https://github.com/christinoleo/claude-mux.git
 cd claude-mux
-bun install
-bun run build
-bun link  # Makes 'claude-mux' available globally
+bun install && bun run build
+bun link  # makes 'claude-mux' available globally
 ```
+</details>
 
 ---
 
 ## Quick Start
 
-### 1. Run setup
-
 ```bash
+# 1. Install hooks into Claude Code
 claude-mux setup
-```
 
-This will:
-- Create the data directory at `~/.claude-watch/`
-- Install Claude Code hooks in `~/.claude/settings.json`
-
-### 2. Start the web server
-
-```bash
+# 2. Start the web server
 claude-mux serve --port 3456 --host 0.0.0.0
+
+# 3. Open http://localhost:3456 (or your LAN IP)
+# 4. Start any Claude Code session — it appears automatically
 ```
-
-### 3. Open the dashboard
-
-Navigate to `http://localhost:3456` (or your machine's IP for LAN access).
-
-### 4. Start using Claude Code
-
-Any Claude Code session started after setup will appear in the dashboard automatically.
-
----
-
-## Web Interface
-
-### Dashboard
-
-The main dashboard shows all active Claude Code sessions organized by project:
-
-| Element | Description |
-|---------|-------------|
-| **Project cards** | Sessions grouped by working directory |
-| **Status indicators** | Busy, Idle, Waiting for input |
-| **Current action** | Shows what Claude is currently doing |
-| **Quick actions** | New session, kill session, refresh |
-
-### Session View
-
-Click any session to open the real-time terminal view:
-
-| Feature | Description |
-|---------|-------------|
-| **Live output** | Streams terminal content via WebSocket |
-| **Syntax highlighting** | Color-coded messages and tool calls |
-| **Text input** | Send messages to Claude |
-| **Action buttons** | Up, Down, Space, Tab, Esc, Ctrl-C, etc. |
-| **Tmux command** | Copy `tmux attach` command for direct access |
-
-### Keyboard Shortcuts (in session view)
-
-| Key | Action |
-|-----|--------|
-| `Enter` | Send message |
-| `Shift+Enter` | New line in message |
 
 ---
 
@@ -168,185 +103,49 @@ Click any session to open the real-time terminal view:
 
 | Command | Description |
 |---------|-------------|
-| `claude-mux serve` | Start the web server |
-| `claude-mux setup` | Run interactive setup wizard |
+| `claude-mux serve` | Start web server (`--port`, `--host`, `--auth <password>`) |
+| `claude-mux setup` | Install Claude Code hooks |
 | `claude-mux uninstall` | Remove hooks and configuration |
-| `claude-mux` | Start TUI dashboard (legacy, requires tmux) |
-
-### Server Options
-
-```bash
-claude-mux serve [options]
-
-Options:
-  -p, --port <number>     Port to listen on (default: 45677)
-  -h, --host <string>     Host to bind to (default: "localhost")
-  -a, --auth <password>   Enable authentication with password
-```
-
-### Examples
-
-```bash
-# Start on custom port
-claude-mux serve --port 8080
-
-# Allow LAN access
-claude-mux serve --host 0.0.0.0
-
-# With authentication
-claude-mux serve --host 0.0.0.0 --auth mysecretpassword
-```
+| `claude-mux send <target> [text]` | Send text or `--keys` to a session |
+| `claude-mux status <target>` | Get session state as JSON |
+| `claude-mux wait <target>` | Block until session reaches `--state` (default: idle,waiting,permission) |
+| `claude-mux new-session --cwd <path>` | Spawn a new detached Claude Code session |
+| `claude-mux capture <target>` | Capture tmux pane output (`--lines N`) |
+| `claude-mux` | TUI dashboard (legacy, requires tmux) |
 
 ---
 
 ## How It Works
 
-### Architecture
-
 ```
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│  Claude Code    │────▶│  Hook Scripts    │────▶│  JSON Files     │
-│  (running)      │     │  (on events)     │     │  (~/.claude-watch/sessions/)
-└─────────────────┘     └──────────────────┘     └────────┬────────┘
-                                                          │
-┌─────────────────┐     ┌──────────────────┐              │
-│  tmux panes     │────▶│  Pane Capture    │──────────────┤
-│  (terminal)     │     │  (WebSocket)     │              │
-└─────────────────┘     └──────────────────┘              │
-                                                          ▼
-                        ┌──────────────────┐     ┌─────────────────┐
-                        │  Web Browser     │◀───▶│  SvelteKit      │
-                        │  (dashboard)     │     │  (WebSocket)    │
-                        └──────────────────┘     └─────────────────┘
+Claude Code events  ──>  Hook script  ──>  JSON files (~/.claude-mux/sessions/)
+                                                    |
+                                           File watcher (500ms)
+                                                    |
+                                           WebSocket broadcast
+                                                    |
+                                           Browser  <──>  SvelteKit server
 ```
 
-### Claude Code Hooks
-
-claude-mux uses [Claude Code hooks](https://docs.anthropic.com/en/docs/claude-code/hooks) to track session state:
-
-| Hook | Purpose |
-|------|---------|
-| `SessionStart` | Register new session with PID and working directory |
-| `UserPromptSubmit` | Mark session as busy |
-| `PreToolUse` | Update status with current tool name |
-| `Stop` | Mark session as idle when turn ends |
-| `Notification` | Handle permission requests and questions |
-
-### Real-time Updates
-
-- **WebSocket connections** for instant updates (no polling)
-- **File watcher** monitors session state changes
-- **Pane capture** streams terminal output every 200ms
-
----
-
-## Terminal UI (Legacy)
-
-claude-mux also includes a terminal-based dashboard for use inside tmux:
-
-```bash
-claude-mux  # Requires tmux
-```
-
-| Key | Action |
-|-----|--------|
-| `j` / `↓` | Move selection down |
-| `k` / `↑` | Move selection up |
-| `Enter` | Jump to selected session |
-| `q` | Quit dashboard |
-
-Press `prefix + W` from any tmux session to jump to the dashboard.
-
----
-
-## Development
-
-### Prerequisites
-
-- Node.js >= 18 (or Bun)
-- tmux (for full functionality)
-
-### Setup
-
-```bash
-git clone https://github.com/christinoleo/claude-mux.git
-cd claude-mux
-bun install
-```
-
-### Development Server
-
-```bash
-bun run dev:serve  # Starts Vite dev server with HMR
-```
-
-### Build
-
-```bash
-bun run build      # Build CLI + web app
-bun run build:cli  # Build CLI only
-bun run build:web  # Build web app only
-```
-
-### Testing
-
-```bash
-bun test           # Run tests
-bun run lint       # Lint code
-bun run format     # Format code
-```
-
-### Project Structure
-
-```
-claude-mux/
-├── src/                    # CLI and hooks
-│   ├── cli.ts              # Entry point
-│   ├── commands/           # CLI commands (serve, setup, tui)
-│   ├── hooks/              # Claude Code hook handler
-│   └── server/             # File watcher, WebSocket handlers
-├── web/                    # SvelteKit web app
-│   ├── src/
-│   │   ├── lib/
-│   │   │   ├── components/ # UI components
-│   │   │   ├── stores/     # Svelte stores (sessions, terminal, preferences)
-│   │   │   └── utils/      # Terminal parser, helpers
-│   │   └── routes/         # Pages and API routes
-│   └── svelte.config.js
-└── docs/
-    └── images/             # Screenshots
-```
+**Hooks** run inside Claude Code's process and write session state to JSON on every event (start, prompt, tool use, stop, notification). The **SvelteKit server** watches those files and pushes updates to connected browsers via WebSocket. Terminal output is captured directly from tmux panes.
 
 ---
 
 ## Troubleshooting
 
-### Sessions not appearing
+**Sessions not appearing** &mdash; Run `claude-mux setup`, then restart Claude Code sessions (hooks load at startup).
 
-1. Ensure you ran `claude-mux setup` to install hooks
-2. Restart any running Claude Code sessions (hooks are loaded at startup)
-3. Check that `~/.claude/settings.json` contains claude-mux hooks
+**Can't connect from another device** &mdash; Use `--host 0.0.0.0` and check your firewall.
 
-### Cannot connect from another device
-
-1. Use `--host 0.0.0.0` to allow external connections
-2. Check your firewall allows the port
-3. Use your machine's LAN IP, not `localhost`
-
-### Status not updating
-
-1. Check hooks are installed: `grep claude-mux ~/.claude/settings.json`
-2. Restart Claude Code sessions to pick up new hooks
+**Status not updating** &mdash; Verify hooks: `grep claude-mux ~/.claude/settings.json`
 
 ---
 
 ## Requirements
 
-- **Bun** >= 1.0 (required for the web server)
-- **tmux** (required for terminal capture)
-- **Claude Code** with hooks support
-
-> **Note:** The `claude-mux serve` command requires [Bun](https://bun.sh) runtime.
+- [Bun](https://bun.sh) >= 1.0
+- tmux
+- Claude Code with hooks support
 
 ---
 
@@ -354,15 +153,6 @@ claude-mux/
 
 MIT
 
----
-
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Run tests (`bun test`)
-4. Commit your changes
-5. Push to the branch
-6. Open a Pull Request
+PRs welcome. Fork, branch, test (`bun test`), and open a PR.

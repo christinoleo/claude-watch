@@ -67,6 +67,7 @@ interface HookInput {
   session_id: string;
   cwd: string;
   hook_event_name?: string;
+  prompt?: string;
   tool_name?: string;
   tool_input?: {
     command?: string;
@@ -360,6 +361,10 @@ function handleUserPromptSubmit(input: HookInput): void {
   session.tmux_target = getTmuxTarget() ?? session.tmux_target;
   session.state = "busy";
   session.current_action = "Thinking...";
+  // Capture the first user prompt as session name
+  if (input.prompt && !session.prompt_text) {
+    session.prompt_text = input.prompt.slice(0, 120);
+  }
   session.last_update = Date.now();
   writeSession(session);
 }
