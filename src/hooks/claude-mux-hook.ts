@@ -359,15 +359,44 @@ function getOrCreateSession(input: HookInput): Session {
   };
 }
 
+/** Truncate a prompt into a short title: first ~40 chars on a word boundary */
+function promptToTitle(prompt: string): string | null {
+  // Strip leading slashes, whitespace, markdown headers
+  let text = prompt.replace(/^[#\s/]+/, '').trim();
+  if (text.length < 4) return null; // too short to be useful (e.g. "1", "yes")
+  // Take first line only
+  text = text.split('\n')[0].trim();
+  if (text.length <= 40) return text;
+  // Cut at word boundary
+  const truncated = text.slice(0, 40);
+  const lastSpace = truncated.lastIndexOf(' ');
+  return (lastSpace > 20 ? truncated.slice(0, lastSpace) : truncated) + '...';
+}
+
+/** Set the tmux pane title via select-pane -T */
+function setPaneTitle(target: string, title: string): void {
+  try {
+    execSync(`tmux select-pane -t ${JSON.stringify(target)} -T ${JSON.stringify(title)}`, {
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+  } catch {
+    // ignore - not critical
+  }
+}
+
 function handleUserPromptSubmit(input: HookInput): void {
   const session = getOrCreateSession(input);
 
   session.tmux_target = getTmuxTarget() ?? session.tmux_target;
   session.state = "busy";
   session.current_action = "Thinking...";
-  // Capture the first user prompt as session name
+  // Capture the first user prompt as session name and set pane title
   if (input.prompt && !session.prompt_text) {
     session.prompt_text = input.prompt.slice(0, 120);
+    const title = promptToTitle(input.prompt);
+    if (title && session.tmux_target) {
+      setPaneTitle(session.tmux_target, title);
+    }
   }
   session.last_update = Date.now();
   writeSession(session);
