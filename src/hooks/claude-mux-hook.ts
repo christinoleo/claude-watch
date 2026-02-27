@@ -143,6 +143,32 @@ function deleteSessionFile(id: string): void {
   }
 }
 
+/**
+ * Delete all sessions with a given PID (except the one we're about to create).
+ * Prevents duplicates when Claude restarts in the same terminal.
+ */
+function deleteSessionsByPid(pid: number, exceptId?: string): void {
+  if (pid <= 0) return;
+  try {
+    const files = readdirSync(SESSIONS_DIR).filter(f => f.endsWith(".json"));
+    for (const file of files) {
+      const sessionId = file.replace(".json", "");
+      if (exceptId && sessionId === exceptId) continue;
+      const path = join(SESSIONS_DIR, file);
+      try {
+        const session = JSON.parse(readFileSync(path, "utf-8")) as Session;
+        if (session.pid === pid) {
+          unlinkSync(path);
+        }
+      } catch {
+        // Skip corrupt files
+      }
+    }
+  } catch {
+    // Ignore
+  }
+}
+
 // Delete any existing sessions with the same tmux_target (cleanup stale sessions)
 // Returns linked_to from any deleted session so callers can preserve it.
 function deleteSessionsByTmuxTarget(tmuxTarget: string, excludeId?: string): string | null {
@@ -303,6 +329,7 @@ async function readStdin(): Promise<HookInput> {
 
 function handleSessionStart(input: HookInput): void {
   const tmuxTarget = getTmuxTarget();
+  const pid = getClaudePid();
 
   // Clean up any stale sessions with the same tmux_target before creating new one
   // Preserve linked_to from pre-registered sessions (set by new-session --linked-to)
@@ -311,13 +338,17 @@ function handleSessionStart(input: HookInput): void {
     linkedTo = deleteSessionsByTmuxTarget(tmuxTarget, input.session_id);
   }
 
+  // Remove any existing sessions with the same PID to prevent duplicates
+  // (e.g. Claude restarting in the same terminal)
+  deleteSessionsByPid(pid, input.session_id);
+
   const gitRoot = getGitRoot(input.cwd);
   const beadsEnabled = isBeadsEnabled(gitRoot);
 
   const session: Session = {
     v: SCHEMA_VERSION,
     id: input.session_id,
-    pid: getClaudePid(),
+    pid,
     cwd: input.cwd,
     git_root: gitRoot,
     beads_enabled: beadsEnabled,
